@@ -1,0 +1,20 @@
+import {z} from 'zod';
+import {AppError,config} from './config.js';
+const combine=(signal,ms)=>AbortSignal.any([AbortSignal.timeout(ms),...signal?[signal]:[]]);
+export function strictMatches(result){return (result.matches||[]).filter(match=>match.rule?.id!=='COMMA_COMPOUND_SENTENCE'&&!['style','register','locale-violation'].includes(match.rule?.issueType)&&!['STYLE','REDUNDANCY','COLLOQUIALISMS','REGISTER'].includes(match.rule?.category?.id)&&match.replacements?.length);}
+export class Engines{
+  constructor(options={}){this.ollamaUrl=options.ollamaUrl||config.ollamaUrl;this.languageToolUrl=options.languageToolUrl||config.languageToolUrl;this.queue=Promise.resolve();this.pending=0;}
+  async health(model){const [ollama,lt]=await Promise.allSettled([fetch(this.ollamaUrl+'/api/tags',{signal:AbortSignal.timeout(2500)}).then(async response=>{if(!response.ok)throw Error();return response.json();}),fetch(this.languageToolUrl+'/v2/languages',{signal:AbortSignal.timeout(2500)}).then(response=>{if(!response.ok)throw Error();return response.json();})]);const models=ollama.status==='fulfilled'?(ollama.value.models||[]).map(value=>({name:value.name,size:value.size,remote:Boolean(value.remote_host||value.remote_model)})):[];return {ollama:ollama.status==='fulfilled',languageTool:lt.status==='fulfilled',model,modelReady:models.some(value=>(value.name===model||value.name===model+':latest')&&!value.remote),models,pending:this.pending};}
+  async check(text,locale='en-US',signal){try{const response=await fetch(this.languageToolUrl+'/v2/check',{method:'POST',headers:{'content-type':'application/x-www-form-urlencoded'},body:new URLSearchParams({text,language:locale,level:'default',disabledCategories:'STYLE,REDUNDANCY,COLLOQUIALISMS,REGISTER'}),signal:combine(signal,20000)});if(!response.ok)throw Error('HTTP '+response.status);const result=await response.json();return {...result,matches:strictMatches(result)};}catch(error){if(signal?.aborted)throw error;throw new AppError('LANGUAGETOOL_OFFLINE','LanguageTool no respondió. Inicia los motores con el lanzador.',503);}}
+  async chat(schema,system,input,{model=config.defaultModel,signal,maxTokens=1800}={}){
+    if(this.pending>=4)throw new AppError('MODEL_BUSY','El motor está ocupado. Espera a que termine la revisión actual.',429);
+    this.pending++;
+    const run=async()=>{if(signal?.aborted)throw signal.reason;const format=z.toJSONSchema(schema);try{const response=await fetch(this.ollamaUrl+'/api/chat',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({model,messages:[{role:'system',content:system},{role:'user',content:JSON.stringify(input)}],format,stream:false,think:false,keep_alive:'15m',options:{temperature:0,num_ctx:8192,num_predict:maxTokens,seed:42}}),signal:combine(signal,120000)});if(!response.ok){const message=await response.text();throw new AppError('OLLAMA_ERROR',response.status===404?'El modelo seleccionado no está instalado. Ejecuta el instalador de motores.':'Ollama no pudo completar la petición local.',503);}
+      const result=await response.json();const value=schema.safeParse(JSON.parse(result.message?.content||'null'));if(!value.success)throw new AppError('MODEL_OUTPUT','La IA no devolvió un resultado verificable. Tu texto sigue intacto; vuelve a intentarlo.',502);return {value:value.data,timing:{seconds:Math.round((result.total_duration||0)/1e8)/10,tokens:result.eval_count||0,model}};
+    }catch(error){if(signal?.aborted)throw error;if(error instanceof AppError)throw error;throw new AppError('OLLAMA_OFFLINE','La IA local no respondió a tiempo. Tu texto sigue intacto; comprueba los motores.',503);}};
+    const result=this.queue.then(run,run);this.queue=result.catch(()=>{});
+    let abortListener;
+    const canceled=signal?new Promise((resolve,reject)=>{abortListener=()=>reject(signal.reason);if(signal.aborted)abortListener();else signal.addEventListener('abort',abortListener,{once:true});}):null;
+    try{return await(canceled?Promise.race([result,canceled]):result);}finally{if(abortListener)signal.removeEventListener('abort',abortListener);this.pending--;}
+  }
+}

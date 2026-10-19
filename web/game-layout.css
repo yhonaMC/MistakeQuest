@@ -1,0 +1,16 @@
+.view-game .orbit-hero .orbit-stage{display:none}
+.main.view-game .orbit-hero{display:block;min-height:0;margin-bottom:22px}
+.main.view-game .orbit-hero .hero-copy h1{font-size:clamp(32px,4.2vw,47px);line-height:1.08;margin-bottom:12px}
+.main.view-game .orbit-hero .hero-description{max-width:60ch}
+@media(max-width:650px){
+  .main.view-game .orbit-hero{margin-bottom:18px}
+  .main.view-game .orbit-hero .hero-copy h1{font-size:35px;letter-spacing:-1.3px}
+  .arena .arcade-hud{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:15px 10px;align-items:center;padding:16px}
+  .arena .hud-mode{grid-column:1/-1;min-width:0}
+  .arena .hud-mode>span:last-child{min-width:0;overflow-wrap:anywhere}
+  .arena .hud-progress{min-width:0;max-width:100%;text-align:left;justify-self:start}
+  .arena .hud-progress>div{justify-content:flex-start;gap:4px}
+  .arena .hud-progress i{width:clamp(9px,3vw,17px)}
+  .arena .hud-streak{margin-left:0;justify-self:end;max-width:100%;white-space:normal;text-align:right;font-size:11px}
+  .arena .hud-streak svg{flex-shrink:0}
+}

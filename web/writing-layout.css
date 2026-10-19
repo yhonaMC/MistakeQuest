@@ -1,0 +1,13 @@
+/* Review feedback follows the same mounted editor and never sizes its input. */
+.editor-view{--writing-input-height:185px}
+.editor-view .editor-panel textarea{height:var(--writing-input-height);min-height:var(--writing-input-height);max-height:var(--writing-input-height);resize:none;overflow-y:auto;scrollbar-gutter:stable}
+.editor-view .editor-footer>.button{inline-size:180px;max-inline-size:100%;height:46px;flex-shrink:0}
+.editor-view>.review-view{margin-top:24px}
+.editor-view .writing-status{color:var(--text);border-color:var(--line);margin-bottom:18px}
+.editor-view .writing-status div>span{color:var(--muted)}
+.writing-result-summary{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 24px;border-top:1px solid var(--line);padding-top:15px}
+.writing-result-summary>p{display:flex;align-items:center;gap:9px;color:var(--mint);font-size:13px;margin:0}
+.writing-result-summary .button{font-size:12px}
+@media(min-width:1450px){.editor-view{--writing-input-height:225px}}
+@media(max-width:850px){.editor-view{--writing-input-height:190px}}
+@media(max-width:650px){.editor-view{--writing-input-height:200px}.editor-view .editor-footer>.button{inline-size:170px}.writing-result-summary{gap:8px}.writing-result-summary .text-actions{gap:18px}}

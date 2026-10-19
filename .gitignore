@@ -1,0 +1,37 @@
+# Dependencies and generated builds
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+
+# Local engines, models, logs and learner data
+.runtime/
+data/
+logs/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.db
+*.db-shm
+*.db-wal
+.env
+.env.*
+!.env.example
+*.log
+
+# Private design drafts, investigation outputs and machine-specific helpers
+/artifacts/
+/docs/superpowers/
+/docs/validation-2026-10-14.md
+/tests/diagnose-*.mjs
+/tests/diagnostics/*.mjs
+
+# Editor, OS and Python cache files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+__pycache__/
+*.py[cod]

@@ -209,12 +209,45 @@ try{
  await page.locator('header .interface-language-capsule').getByRole('button',{name:'English',exact:true}).click();
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'The guided summary fits at 320px in English');
  await page.screenshot({path:resolve(root,'radar-summary-en-320.png'),fullPage:true});
+ // Start again through the actual summary action: exhausted and assisted targets
+ // must both return, and a partial shot must survive the app's Progress resume.
+ const radarAgainPromise=postRoundResponse();
+ await page.locator('.guided-radar-again').click();
+ const radarAgainResponse=await radarAgainPromise;assert.equal(radarAgainResponse.status(),200);
+ const nextRadar=await radarAgainResponse.json();
+ assert.notEqual(nextRadar.id,radarRound.id);
+ assert.deepEqual(nextRadar.mix,{review:2,new:1,spaced:0,practice:0});
+ const radarPlan=planFor(nextRadar.id),reviewTargets=radarPlan.filter(slot=>slot.kind==='review');
+ assert.deepEqual(reviewTargets.map(slot=>slot.issueId).sort(),[firstRadar.issueId,secondRadar.issueId].sort(),'Exhausted and assisted targets both return in the next radar session');
+ for(const previous of [firstRadar,secondRadar]){
+  const review=reviewTargets.find(slot=>slot.issueId===previous.issueId);
+  assert.notEqual(review.bank.items[0].good,previous.privateData.item.good,'A returning target uses a different verified sentence when available');
+ }
+ await page.waitForFunction(id=>document.querySelector('.guided-radar-session')?.dataset.gameId===id,nextRadar.game.id);
+ assert.deepEqual(store.progress().totals,totals,'Preparing the next session neither consumes shots nor awards XP');
+ const resumedGame=store.game(nextRadar.game.id),resumedItem=resumedGame.privateData.item;
+ const resumedWrong=resumedGame.privateData.tokens.find(token=>token.offset+token.length<=resumedItem.targetOffset||token.offset>=resumedItem.targetOffset+resumedItem.targetLength);
+ await startRadar();await shoot(resumedGame,resumedWrong);await waitRemaining(2);
+ const savedHint=await page.locator('.guided-radar-hint p').innerText(),resumedTotals=store.progress().totals;
+ assert.equal(resumedTotals.attempts,totals.attempts+1);assert.equal(resumedTotals.xp,totals.xp);assert.equal(resumedTotals.arcadePoints,totals.arcadePoints);
  await page.reload();await page.getByText('Local AI ready',{exact:true}).waitFor();
  await page.getByRole('button',{name:'My progress',exact:true}).click();
- assert.deepEqual(store.progress().totals,totals,'Round results and XP survive reloading the app');
+ assert.deepEqual(store.progress().totals,resumedTotals,'Round results and XP survive reloading the app');
+ const radarResumePromise=page.waitForResponse(response=>response.url()===base+'/api/practice-rounds/'+nextRadar.id&&response.request().method()==='GET');
+ await page.locator('.practice-round-history > article').filter({hasText:'Error radar'}).filter({has:page.getByRole('button',{name:'Continue round',exact:true})}).getByRole('button',{name:'Continue round',exact:true}).click();
+ assert.equal((await radarResumePromise).status(),200);
+ await page.waitForFunction(id=>document.querySelector('.guided-radar-session')?.dataset.gameId===id,nextRadar.game.id);
+ assert.equal(await page.locator('.radar-attempts').getAttribute('data-attempts-remaining'),'2','Resuming keeps the consumed shot');
+ assert.equal(await page.locator('.guided-radar-hint').getAttribute('data-hint-level'),'1');
+ assert.equal(await page.locator('.guided-radar-hint p').innerText(),savedHint,'Resuming keeps the saved clue');
+ assert.equal(await page.locator(`.radar-target[data-token-id="${resumedWrong.id}"]`).isDisabled(),true,'The discarded word stays disabled after resume');
+ assert.deepEqual(store.progress().totals,resumedTotals,'Resume creates no extra attempt or reward');
+ const exportResponse=await context.request.get(base+'/api/export');assert.equal(exportResponse.status(),200);
+ const exported=await exportResponse.json();assert.deepEqual(exported.progress.totals,resumedTotals);
+ assert.ok(exported.tables.practice_rounds.some(round=>round.id===nextRadar.id),'The unfinished radar plan is included in exported progress');
  assert.equal((await getRound(firstRound.id)).complete,true);assert.equal((await getRound(radarRound.id)).complete,true);
  assert.equal(gameRequests.length,0,'Choice and radar use the durable round API rather than one-off game creation');
  assert.equal(aiCalls,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
- const report={passed:true,firstRound:{id:firstRound.id,stats:completed.stats},adaptiveMix:secondRound.mix,failedReviewIssueIds:failed,resumedSettledCurrentGame:true,radar:{id:radarRound.id,stats:radarCompleted.stats},totals,browserAttempts:attemptRequests.length,aiCalls,errors};
+ const report={passed:true,firstRound:{id:firstRound.id,stats:completed.stats},adaptiveMix:secondRound.mix,failedReviewIssueIds:failed,resumedSettledCurrentGame:true,radar:{id:radarRound.id,stats:radarCompleted.stats,nextMix:nextRadar.mix,resumedPartialGame:true},totals:resumedTotals,browserAttempts:attemptRequests.length,aiCalls,errors};
  writeFileSync(resolve(root,'result.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report));console.log(root);
 }finally{await browser?.close();await app.close();store.close();}

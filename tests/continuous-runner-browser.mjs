@@ -200,6 +200,19 @@ try{
  assert.equal(createRequests.length,1,'Seven gates stay within the same ten-door round');
  assert.equal(nextRequests.length,6);
  for(const [index,request]of nextRequests.entries())assert.equal(request.afterGameId,rounds[index].id,'Transitions identify the settled gate and remain idempotent');
+ // A document-visibility change pauses the active gate until the learner resumes.
+ await page.locator('.runner-pause').click();
+ await page.waitForFunction(()=>document.querySelector('.runner-arcade')?.dataset.phase==='running');
+ await page.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,get:()=>true});document.dispatchEvent(new Event('visibilitychange'));});
+ await page.waitForFunction(()=>document.querySelector('.runner-arcade')?.dataset.phase==='paused');
+ const hiddenPlayer=await player.boundingBox(),hiddenClock=await page.locator('.runner-arcade').getAttribute('data-clock');
+ await page.waitForTimeout(5400);
+ assert.equal(await gameId(),rounds[6].id,'A hidden document never advances the active gate');
+ assert.equal(await page.locator('.runner-arcade').getAttribute('data-clock'),hiddenClock,'A hidden document freezes the flight clock');
+ assert.deepEqual(await player.boundingBox(),hiddenPlayer);
+ assert.deepEqual(store.progress().totals,totals,'A hidden document never records a timeout or reward');
+ await page.evaluate(()=>{delete document.hidden;document.dispatchEvent(new Event('visibilitychange'));});
+ assert.equal(await page.locator('.runner-arcade').getAttribute('data-phase'),'paused','Returning to the document requires an explicit resume');
  await page.setViewportSize({width:320,height:1100});
  await page.locator('header .interface-language-capsule').getByRole('button',{name:'English',exact:true}).click();
  assert.equal(await page.locator('html').getAttribute('lang'),'en');
@@ -216,8 +229,70 @@ try{
  const durable=await context.request.get(base+'/api/progress');
  assert.equal(durable.status(),200);
  assert.deepEqual((await durable.json()).totals,totals);
+
+ // Resume the same plan and finish all ten gates, including its saved timeouts.
+ await page.getByRole('button',{name:'Continue round',exact:true}).click();
+ await session.waitFor();
+ assert.equal(await session.getAttribute('data-round'),'7');
+ assert.equal(await gameId(),rounds[6].id,'Reload resumes the unattempted seventh gate');
+ const roundId=await session.getAttribute('data-round-id');
+ for(let number=7;number<=10;number++){
+  const game=number===7?await currentGame():await remember(number);
+  await startIfNeeded();
+  await answer(game,true);
+  if(number<10)await nextAfter(game,number+1);
+ }
+ const summary=page.locator('.practice-round-summary');await summary.waitFor();
+ assert.equal(await session.getAttribute('data-round-complete'),'true');
+ assert.equal(await session.getAttribute('data-saved'),'10');
+ assert.equal(await summary.getAttribute('data-correct'),'7');
+ assert.equal(await summary.getAttribute('data-wrong'),'1');
+ assert.equal(await summary.getAttribute('data-missed'),'2');
+ const completedRoundResponse=await context.request.get(base+'/api/practice-rounds/'+roundId);
+ assert.equal(completedRoundResponse.status(),200);
+ const completedRound=await completedRoundResponse.json();
+ assert.equal(completedRound.complete,true);assert.equal(completedRound.total,10);assert.equal(completedRound.completedCount,10);assert.equal(completedRound.game,null);
+ const completedTotals=store.progress().totals,gamesAfterTen=store.db.prepare('SELECT COUNT(*) n FROM games').get().n;
+ assert.equal(completedTotals.attempts,10);assert.equal(completedTotals.completedGames,10);
+ assert.equal(completedTotals.mistakes,3);assert.equal(completedTotals.xp,140);assert.equal(completedTotals.arcadePoints,680);
+ assert.equal(attemptRequests.length,11,'Ten gates and the one explicit retry make eleven requests');
+ assert.equal(nextRequests.length,9);
+ await page.waitForTimeout(1600);
+ assert.equal(store.db.prepare('SELECT COUNT(*) n FROM games').get().n,gamesAfterTen,'The tenth gate never creates an eleventh gate');
+ assert.equal(createRequests.length,1,'The next round waits for an explicit request');
+ assert.deepEqual(store.progress().totals,completedTotals,'The completed summary never writes another attempt');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'The ten-gate summary fits in English at 320px');
+ await page.screenshot({path:resolve(root,'continuous-ten-gate-summary-en-320.png'),fullPage:true});
+
+ // Both timeout-only and wrong-choice correction targets enter the next round.
+ const nextRoundResponsePromise=page.waitForResponse(response=>response.url()===base+'/api/practice-rounds'&&response.request().method()==='POST');
+ await page.getByRole('button',{name:'Next round',exact:true}).click();
+ const nextRoundResponse=await nextRoundResponsePromise;assert.equal(nextRoundResponse.status(),200);
+ const nextRound=await nextRoundResponse.json();
+ await page.waitForFunction(id=>document.querySelector('.continuous-runner-session')?.dataset.roundId===id,nextRound.id);
+ await page.locator('.runner-pause').click();
+ await page.waitForFunction(()=>document.querySelector('.runner-arcade')?.dataset.phase==='paused');
+ assert.notEqual(nextRound.id,roundId);assert.equal(nextRound.total,10);
+ assert.equal(createRequests.length,2);assert.equal(createRequests[1].previousRoundId,roundId);
+ const nextPlan=JSON.parse(store.db.prepare('SELECT plan FROM practice_rounds WHERE id=?').get(nextRound.id).plan);
+ const reviewIssueIds=nextPlan.filter(slot=>slot.kind==='review').map(slot=>slot.issueId).sort();
+ const failedIssueIds=[...new Set([missed.issueId,wrong.issueId,sixth.issueId])].sort();
+ assert.deepEqual(reviewIssueIds,failedIssueIds,'Every missed or wrong correction returns as targeted review');
+ assert.notEqual(missed.issueId,wrong.issueId,'The timeout-only fixture proves missed targets return independently of wrong choices');
+ assert.ok(reviewIssueIds.includes(missed.issueId));
+ assert.equal(nextRound.mix.review,failedIssueIds.length);
+ assert.deepEqual(store.progress().totals,completedTotals,'Planning the next round never awards points or XP');
+ const savedNextPlan=JSON.stringify(nextPlan);
+ await page.reload();await page.getByText('Local AI ready',{exact:true}).waitFor();
+ await page.getByRole('button',{name:'My progress',exact:true}).click();
+ assert.deepEqual(store.progress().totals,completedTotals,'Completed round outcomes remain durable after a second reload');
+ const durableNextRoundResponse=await context.request.get(base+'/api/practice-rounds/'+nextRound.id);
+ assert.equal(durableNextRoundResponse.status(),200);
+ const durableNextRound=await durableNextRoundResponse.json();
+ assert.equal(durableNextRound.completedCount,0);assert.deepEqual(durableNextRound.mix,nextRound.mix);
+ assert.equal(JSON.stringify(JSON.parse(store.db.prepare('SELECT plan FROM practice_rounds WHERE id=?').get(nextRound.id).plan)),savedNextPlan,'The next round keeps its saved review queue after reload');
  assert.equal(aiCalls,0);assert.deepEqual(errors,[]);assert.deepEqual(external,[]);
- const report={passed:true,rounds,settledGates:6,lostResponseIdempotent:true,englishMobile320:true,missDurationMs:Math.round(missDuration),totals,aiCalls,errors};
+ const report={passed:true,rounds,settledGates:10,noEleventhGate:true,hiddenPause:true,lostResponseIdempotent:true,englishMobile320:true,missDurationMs:Math.round(missDuration),partialTotals:totals,totals:completedTotals,nextRound:{id:nextRound.id,mix:nextRound.mix,reviewIssueIds},aiCalls,errors};
  writeFileSync(resolve(root,'result.json'),JSON.stringify(report,null,2));
  console.log(JSON.stringify(report));console.log(root);
 }finally{await browser?.close();await app.close();store.close();}

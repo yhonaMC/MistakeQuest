@@ -52,6 +52,22 @@ try{
  assert.equal(attempts[0].idempotencyKey,attempts[1].idempotencyKey,'Retry uses the same attempt key');
  assert.equal(await page.locator('.radar-attempts').getAttribute('data-attempts-remaining'),'2');
  assert.equal(await page.locator('.radar-target[data-token-id="0"]').isDisabled(),true,'A discarded word cannot cost another attempt');
+ const settledAttempts=attempts.length,firstMiss=cached.get(attempts.at(-1).idempotencyKey);
+ await page.locator('.radar-target[data-token-id="0"]').dispatchEvent('click');
+ assert.equal(attempts.length,settledAttempts,'Shooting a discarded word does not submit another attempt');
+ await page.evaluate(()=>window.guidedRadarHarness.leave());
+ await page.locator('.guided-radar-session').waitFor({state:'detached'});
+ const restoredGame={...makeGame(1),...firstMiss,practiceRound:{id:'round-fixture',mode:'radar',total:3,completedCount:0,complete:false,stats:{correct:0,wrong:0,missed:0,assisted:0,exhausted:0},xpEarned:0,mix:{}}};
+ await page.evaluate(game=>window.guidedRadarHarness.resume(game),restoredGame);
+ await page.locator('.radar-start').waitFor();
+ assert.equal(await page.locator('.radar-attempts').getAttribute('data-attempts-remaining'),'2','Resuming a public snapshot preserves spent attempts');
+ assert.equal(await page.locator('.guided-radar-hint').getAttribute('data-hint-level'),'1','Resuming preserves progressive hint level');
+ assert.match(await page.locator('.guided-radar-hint').innerText(),/Busca el verbo que acompaña a sister/,'Resuming preserves the saved hint');
+ assert.equal(await page.locator('.radar-target[data-token-id="0"]').isDisabled(),true);
+ assert.equal(attempts.length,settledAttempts,'Remounting a saved session does not submit a shot');
+ await page.locator('.radar-start').click();
+ assert.equal(await page.locator('.radar-target[data-token-id="0"]').isDisabled(),true,'A discarded word stays disabled after resuming');
+ assert.equal(await page.locator('.radar-target[data-token-id="1"]').isEnabled(),true,'Resuming still permits undiscarded words');
  await shoot(1);
  await page.locator('.guided-radar-hint[data-hint-level="2"]').waitFor();
  assert.equal(await page.locator('.radar-attempts').getAttribute('data-attempts-remaining'),'1');
@@ -106,5 +122,5 @@ try{
   await page.screenshot({path:resolve(root,'guided-summary-'+width+'.png'),fullPage:true});
  }
  assert.deepEqual(errors,[]);
- console.log('Guided radar checks passed: durable retry, three server attempts, progressive hints, discarded words, paused automatic progression, readable reveal, three-phrase summary and bilingual mobile UI.');
+ console.log('Guided radar checks passed: durable retry, three server attempts, progressive hints, discarded words, partial-session remount, paused automatic progression, readable reveal, three-phrase summary and bilingual mobile UI.');
 }finally{await browser?.close();await server.close();}

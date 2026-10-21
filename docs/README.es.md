@@ -252,6 +252,7 @@ No hay un script npm `dev`. `npm start` ejecuta el servicio con la compilación 
 | --- | --- |
 | `npm test` | Pruebas unitarias y de API de Node: validación de revisiones, reglas de juegos, persistencia y recompensas. No necesita los motores reales. |
 | `npm run test:live` | Revisiones y juegos con Ollama, Qwen3 8B y LanguageTool reales. Enciende antes los motores. |
+| `npm run test:live:arcade` | Parte de una base vacía, revisa el texto y genera ejemplos con los motores locales reales; después juega diez puertas y una sesión de Radar guiado. Verifica el regreso de errores, el guardado tras reiniciar y la exportación. Requiere compilación actual, motores y Microsoft Edge; elige su propio puerto local. |
 | `npm run test:e2e` | Flujo con motores reales desde la revisión hasta los seis juegos, persistencia tras reiniciar y diseño móvil. Requiere compilación actual, motores, Microsoft Edge instalado y puerto `3211` libre. |
 | `npm run test:arcade` | Los seis formatos, ES/EN, variedad, vuelo continuo, rondas guardadas, puntos e intentos de Radar. Usa datos aislados y motores simulados; requiere compilación actual y Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | Render 3D, controles persistentes de movimiento, selección por teclado, tamaños móviles y respaldo sin WebGL. Simula la disponibilidad de motores; requiere compilación, Microsoft Edge y puerto `3212` libre. |
@@ -261,6 +262,8 @@ No hay un script npm `dev`. `npm start` ejecuta el servicio con la compilación 
 Las pruebas de navegador seleccionan el canal de **Microsoft Edge** instalado mediante Playwright (`msedge`). Las comprobaciones con el modelo real pueden tardar bastante más que las de datos preparados y variar según su salida. La evidencia del navegador se guarda en la carpeta ignorada `test-results/`. Estas suites usan bases aisladas en lugar del historial habitual de aprendizaje.
 
 `npm run test:arcade` también comprueba el límite de diez puertas, los repasos de respuestas incorrectas y puertas omitidas, el regreso de errores agotados o resueltos con pistas en Radar, la recuperación desde Mi progreso y el componente de Radar guiado. La suite unitaria cierra y vuelve a abrir archivos SQLite reales para verificar pistas, intentos, colas de repaso y reintentos sin duplicar XP ni puntos.
+
+Para comprobar el flujo completo desde la IA hasta los juegos, usa `npm run test:live:arcade`. No prepara correcciones ni bancos de ejemplos de antemano y no sustituye las respuestas de los motores por datos simulados. El informe guarda el texto de prueba, las correcciones reales, las llamadas a los motores, los resultados de los juegos y el progreso en `test-results/live-arcade-*`.
 
 También hay comprobaciones específicas: `node tests/radar-arcade-browser.mjs`, `node tests/runner-arcade-browser.mjs` y `node tests/learner-paragraph.mjs --all`. La del párrafo usa motores reales y escribe en `test-results/`; crea esa carpeta antes si todavía no existe.
 

@@ -252,6 +252,7 @@ There is no `dev` npm script. `npm start` runs the service against the current `
 | --- | --- |
 | `npm test` | Node unit and API tests, including review validation, game rules, persistence, and rewards. Does not require the real engines. |
 | `npm run test:live` | Real Ollama, Qwen3 8B, and LanguageTool review and game checks. Start the engines first. |
+| `npm run test:live:arcade` | Starts with an empty database, reviews text and generates examples with the real local engines, then plays a full ten-gate run and guided radar session. Checks returning mistakes, restart persistence, and export. Requires a current build, engines, and Microsoft Edge; chooses its own local port. |
 | `npm run test:e2e` | Real-engine browser flow through review and all six games, restart persistence, and mobile layout. Requires a current build, engines, installed Microsoft Edge, and free port `3211`. |
 | `npm run test:arcade` | Browser checks for six formats, ES/EN, round variety, continuous flight, saved rounds, scoring, and radar attempts. Uses isolated fixtures and simulated engines; requires a current build and Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | 3D rendering, persistent motion controls, keyboard selection, mobile sizing, and no-WebGL fallback. Uses simulated engine health; requires a build, Microsoft Edge, and free port `3212`. |
@@ -261,6 +262,8 @@ There is no `dev` npm script. `npm start` runs the service against the current `
 Browser tests select Playwright's installed **Microsoft Edge** channel (`msedge`). Live model checks can take considerably longer than fixture-based tests and can vary with model output. Browser evidence is written to the ignored `test-results/` directory. These suites use isolated databases rather than your normal learning history.
 
 `npm run test:arcade` also checks the ten-gate stop, reviews of wrong answers and missed gates, the next radar session's exhausted/assisted targets, partial-session recovery through My progress, and the guided radar component. The unit suite closes and reopens real SQLite files to verify saved hints, attempts, review queues, and retries without duplicate XP or points.
+
+For the complete AI-to-game flow, use `npm run test:live:arcade`. It does not seed corrections or example banks and does not replace engine responses with fixtures. Its report records the sample text, actual corrections, engine calls, game results, and saved progress under `test-results/live-arcade-*`.
 
 Additional focused checks include `node tests/radar-arcade-browser.mjs`, `node tests/runner-arcade-browser.mjs`, and `node tests/learner-paragraph.mjs --all`. The paragraph check uses real engines and writes under `test-results/`; create that directory first if it does not exist.
 

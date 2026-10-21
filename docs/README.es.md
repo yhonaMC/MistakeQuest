@@ -131,6 +131,8 @@ Una sesión de Radar contiene **3 frases**, cada una con **3 intentos**. El prim
 
 Usa el ratón, toca una palabra o apunta con **Tab / flechas** y activa con **Enter**. Pausa para leer la corrección con calma. El resumen distingue los aciertos sin ayuda, los aciertos con pistas y las correcciones vistas al agotar los intentos.
 
+La siguiente sesión prioriza los errores que agotaron sus intentos o necesitaron pistas y completa los espacios restantes con retos nuevos verificados cuando están disponibles. Los repasos usan otra frase sencilla cuando está disponible. Al retomar una sesión parcial se conservan los intentos restantes, las palabras descartadas y la pista actual.
+
 ### Recompensas de XP
 
 | Partida resuelta | XP |
@@ -257,6 +259,8 @@ No hay un script npm `dev`. `npm start` ejecuta el servicio con la compilación 
 | `node tests/practice-status-browser.mjs` | Retirada de falsos positivos históricos mediante la API real, una base aislada y sin llamadas a la IA. Requiere compilación, Microsoft Edge y puerto `3213` libre. |
 
 Las pruebas de navegador seleccionan el canal de **Microsoft Edge** instalado mediante Playwright (`msedge`). Las comprobaciones con el modelo real pueden tardar bastante más que las de datos preparados y variar según su salida. La evidencia del navegador se guarda en la carpeta ignorada `test-results/`. Estas suites usan bases aisladas en lugar del historial habitual de aprendizaje.
+
+`npm run test:arcade` también comprueba el límite de diez puertas, los repasos de respuestas incorrectas y puertas omitidas, el regreso de errores agotados o resueltos con pistas en Radar, la recuperación desde Mi progreso y el componente de Radar guiado. La suite unitaria cierra y vuelve a abrir archivos SQLite reales para verificar pistas, intentos, colas de repaso y reintentos sin duplicar XP ni puntos.
 
 También hay comprobaciones específicas: `node tests/radar-arcade-browser.mjs`, `node tests/runner-arcade-browser.mjs` y `node tests/learner-paragraph.mjs --all`. La del párrafo usa motores reales y escribe en `test-results/`; crea esa carpeta antes si todavía no existe.
 

@@ -131,6 +131,8 @@ A radar session contains **3 sentences**, each with **3 attempts**. The first an
 
 Use the mouse, touch a word, or aim with **Tab / arrow keys** and activate with **Enter**. Pause to read the correction at your own pace. The summary distinguishes answers found without help, answers found with hints, and corrections revealed after attempts ran out.
 
+The next session prioritizes targets that exhausted their attempts or needed hints, then fills remaining slots with new checked exercises when available. Returning targets use a different simple sentence when one is available. Resuming a partial session preserves its remaining attempts, discarded words, and current hint.
+
 ### XP rewards
 
 | Successful completion | XP |
@@ -257,6 +259,8 @@ There is no `dev` npm script. `npm start` runs the service against the current `
 | `node tests/practice-status-browser.mjs` | Historical false-positive retirement through the real API with an isolated database and no AI calls. Requires a build, Microsoft Edge, and free port `3213`. |
 
 Browser tests select Playwright's installed **Microsoft Edge** channel (`msedge`). Live model checks can take considerably longer than fixture-based tests and can vary with model output. Browser evidence is written to the ignored `test-results/` directory. These suites use isolated databases rather than your normal learning history.
+
+`npm run test:arcade` also checks the ten-gate stop, reviews of wrong answers and missed gates, the next radar session's exhausted/assisted targets, partial-session recovery through My progress, and the guided radar component. The unit suite closes and reopens real SQLite files to verify saved hints, attempts, review queues, and retries without duplicate XP or points.
 
 Additional focused checks include `node tests/radar-arcade-browser.mjs`, `node tests/runner-arcade-browser.mjs`, and `node tests/learner-paragraph.mjs --all`. The paragraph check uses real engines and writes under `test-results/`; create that directory first if it does not exist.
 

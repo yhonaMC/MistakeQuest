@@ -4,6 +4,7 @@ import {digest} from './store.js';
 import {makeGame,publicGame} from './games.js';
 import {normalizeAnswer,normalizeSentence} from './edits.js';
 import {selectVariedChoiceCandidates} from './practice-pool.js';
+import {hasInvalidPracticeOrder} from './corrections.js';
 const parse=JSON.parse,json=JSON.stringify,emptyStats=()=>({correct:0,wrong:0,missed:0,assisted:0,exhausted:0}),count=stats=>stats.correct+stats.wrong+stats.missed+stats.exhausted;
 const sentence=entry=>normalizeSentence(entry.bank.items[0].good),pair=entry=>json([normalizeAnswer(entry.bank.items[0].original,true),normalizeAnswer(entry.bank.items[0].replacement,true)]);
 
@@ -56,7 +57,7 @@ export class PracticeRounds{
     let pool=selectVariedChoiceCandidates(this.store,issue.id),anchorBank;try{anchorBank=this.store.getBank(issue.id);}catch{}
     const retired=bank=>bank?.validatorVersion===10&&bank.status==='already_correct'?{status:'already_correct',issueId:issue.id,message:bank.message||'Este fragmento ya estaba bien. No necesita un reto.',context:bank.context||issue.sentence}:null;
     if(retired(anchorBank))return retired(anchorBank);
-    if(anchorBank?.validatorVersion!==10||!anchorBank.items?.length&&anchorBank.status!=='already_correct'){try{await this.games.bank(issue,locale,signal);}catch(error){if(signal?.aborted||!pool.length)throw error;}pool=selectVariedChoiceCandidates(this.store,issue.id);}signal?.throwIfAborted();
+    if(anchorBank?.validatorVersion!==10||hasInvalidPracticeOrder(issue,anchorBank)||!anchorBank.items?.length&&anchorBank.status!=='already_correct'){try{await this.games.bank(issue,locale,signal);}catch(error){if(signal?.aborted||!pool.length)throw error;}pool=selectVariedChoiceCandidates(this.store,issue.id);}signal?.throwIfAborted();
     if(retired(this.store.getBank(issue.id)))return retired(this.store.getBank(issue.id));
     if(!pool.length)throw new AppError('NO_VALID_GAME','No hay ejercicios verificados disponibles para esta ronda.',422);
     return this.store.transaction(()=>{

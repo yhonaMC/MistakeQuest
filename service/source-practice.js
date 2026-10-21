@@ -1,5 +1,5 @@
 import {applyEdits,isAllowedEdit,words} from './edits.js';
-import {correctionParts,partCategory} from './corrections.js';
+import {practiceCorrectionParts,partCategory} from './corrections.js';
 const clauseBoundary=/[.!?\n]|,(?=\s+(?:I(?:['’]m)?|we|he|she|they|it|this|today)\b)/gi;
 
 // Reuse confirmed changes, correcting neighboring errors before isolating one target.
@@ -12,7 +12,7 @@ export function sourcePracticeItems(issue,related=[]){
   const origin=origins.sort((a,b)=>all.filter(e=>fits(e,b)).length-all.filter(e=>fits(e,a)).length)[0];
   const edits=all.filter(e=>fits(e,origin)).map(e=>({...e,offset:e.offset-origin}));
   let corrected;try{corrected=applyEdits(source,edits);}catch{return [];}
-  const parts=correctionParts(issue.original,issue.replacement),items=[];
+  const parts=practiceCorrectionParts(issue),items=[];
   const before=edits.filter(e=>e.offset<issue.offset-origin).reduce((sum,e)=>sum+e.replacement.length-e.length,0);let delta=0;
   for(const part of parts){
     const category=partCategory(part,issue.category),start=issue.offset-origin+before+part.offset+delta,end=start+part.replacement.length;

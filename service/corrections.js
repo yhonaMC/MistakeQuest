@@ -33,6 +33,42 @@ export function correctionParts(original,replacement){
   return [{offset:0,length:original.length,original,replacement}];
 }
 
+// Moving a word is one repair: splitting it invents a deletion and an insertion.
+// Trim only the unchanged edges so Radar can still offer genuine distractors.
+export function practiceCorrectionParts(issue){
+  const {original,replacement,category}=issue;
+  if(category!=='word_order')return correctionParts(original,replacement);
+  if(original===replacement)return [];
+  const scan=value=>[...value.matchAll(/[\p{L}\p{N}]+(?:['’][\p{L}\p{N}]+)*|[^\s]/gu)].map(match=>({text:match[0],offset:match.index,end:match.index+match[0].length}));
+  const a=scan(original),b=scan(replacement),parts=[];let first=0,lastA=a.length,lastB=b.length;
+  const keepCase=(left,right)=>{if(left.text!==right.text)parts.push({offset:left.offset,length:left.end-left.offset,original:left.text,replacement:right.text});};
+  while(first<lastA&&first<lastB&&a[first].text.toLowerCase()===b[first].text.toLowerCase()){keepCase(a[first],b[first]);first++;}
+  while(lastA>first&&lastB>first&&a[lastA-1].text.toLowerCase()===b[lastB-1].text.toLowerCase()){keepCase(a[lastA-1],b[lastB-1]);lastA--;lastB--;}
+  if(first<lastA&&first<lastB){
+    const offset=a[first].offset,length=a[lastA-1].end-offset,part={offset,length,original:original.slice(offset,offset+length),replacement:replacement.slice(b[first].offset,b[lastB-1].end)};
+    parts.push(part);
+  }
+  parts.sort((left,right)=>left.offset-right.offset);
+  if(parts.length&&applyEdits(original,parts)===replacement)return parts;
+  return [{offset:0,length:original.length,original,replacement}];
+}
+
+const orderPair=(original,replacement)=>{
+  let before=original.trim(),after=replacement.trim();
+  const punctuation=value=>/[^\p{L}\p{N}\s]/u.test(value);
+  while(before&&after&&before[0]===after[0]&&punctuation(before[0])){before=before.slice(1).trimStart();after=after.slice(1).trimStart();}
+  while(before&&after&&before.at(-1)===after.at(-1)&&punctuation(before.at(-1))){before=before.slice(0,-1).trimEnd();after=after.slice(0,-1).trimEnd();}
+  return JSON.stringify([before.replace(/\s+/g,' '),after.replace(/\s+/g,' ')]);
+};
+export function matchesPracticeOrder(issue,item,{allowContext=false}={}){
+  if(issue.category!=='word_order')return true;
+  if(typeof item?.original!=='string'||typeof item?.replacement!=='string')return false;
+  const expected=new Set(practiceCorrectionParts(issue).map(part=>orderPair(part.original,part.replacement)));
+  const actual=allowContext?practiceCorrectionParts({...item,category:'word_order'}):[item];
+  return actual.some(part=>expected.has(orderPair(part.original,part.replacement)));
+}
+export const hasInvalidPracticeOrder=(issue,bank)=>Array.isArray(bank?.items)&&bank.items.some(item=>!matchesPracticeOrder(issue,item));
+
 export function reviewSegments(text){
   const segments=[];let offset=0;
   while(offset<text.length){

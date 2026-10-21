@@ -1,4 +1,5 @@
 import {applyEdits,isAllowedEdit,locateIssue,normalizeAnswer,normalizeSentence} from './edits.js';
+import {matchesPracticeOrder} from './corrections.js';
 
 const sentenceKey=value=>typeof value==='string'?normalizeSentence(value):'';
 
@@ -30,6 +31,7 @@ function verifiedChoiceItems(issue,bank){
   const items=[];
   for(const item of Array.isArray(bank.items)?bank.items:[]){
     if(!item||!['bad','good','original','replacement'].every(key=>typeof item[key]==='string'&&item[key].trim()))continue;
+    if(!matchesPracticeOrder(issue,item))continue;
     const category=item.category||issue.category,anchor=Number.isInteger(item.targetOffset)&&Number.isInteger(item.targetLength)?{offset:item.targetOffset,length:item.targetLength}:undefined;
     try{
       const edit=locateIssue(item.bad,{original:item.original,replacement:item.replacement,sentence:item.bad,category},anchor);

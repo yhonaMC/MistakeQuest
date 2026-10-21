@@ -2,19 +2,21 @@ import assert from 'node:assert/strict';
 import {mkdirSync,readFileSync,writeFileSync,appendFileSync} from 'node:fs';
 import {resolve} from 'node:path';
 import {chromium} from 'playwright';
+import {shortArcadeFixture,grammarArcadeFixture} from './live-arcade-fixtures.js';
 
 // Deliberately use real, newly generated engine output. This is an opt-in live
 // integration test, not a deterministic fixture test. Never point it at learner data.
-const root=resolve('test-results/live-arcade-'+Date.now());
+const grammarScenario=process.argv.includes('--grammar'),fixture=grammarScenario?grammarArcadeFixture:shortArcadeFixture;
+const root=resolve('test-results/live-arcade-'+(grammarScenario?'grammar-':'')+Date.now());
 mkdirSync(root,{recursive:true});
 process.env.MQ_DATA_DIR=root;
 const [{Store},{Engines},{buildApp}]=await Promise.all([
  import('../service/store.js'),import('../service/engines.js'),import('../service/app.js')
 ]);
 const database=resolve(root,'practice.sqlite');
-const sourceText="Yesterday I go to the park with my freind. She don't like coffee. We have two dog. I think tha this book is importan.";
+const {sourceText}=fixture;
 const tables=['analyses','issues','banks','games','attempts','completions','rewards','practice_rounds'];
-const report={passed:false,root,database,sourceText,engineCalls:[],browserErrors:[],externalBrowserRequests:[],apiFailures:[],attempts:[],preparedBanks:[],rounds:{}};
+const report={passed:false,scenario:fixture.name,root,database,sourceText,engineCalls:[],browserErrors:[],externalBrowserRequests:[],apiFailures:[],attempts:[],preparedBanks:[],rounds:{}};
 let phase='startup',store,app,browser,context,page,base;
 function log(message){const line=new Date().toISOString()+' '+message;console.log(line);appendFileSync(resolve(root,'run.log'),line+'\n');}
 function instrumentEngines(){
@@ -24,7 +26,7 @@ function instrumentEngines(){
   engines[name]=async(...args)=>{
    const entry={method:name,phase,startedAt:new Date().toISOString(),...(name==='check'?{text:args[0]}:{prompt:args[1].slice(0,100),input:args[2]})},started=performance.now();
    report.engineCalls.push(entry);
-   try{const value=await actual(...args);entry.ok=true;entry.timing=value.timing;entry.resultCount=name==='check'?value.matches?.length:value.value?.items?.length??value.value?.issues?.length??value.value?.decisions?.length;return value;}
+   try{const value=await actual(...args);entry.ok=true;entry.timing=value.timing;entry.resultCount=name==='check'?value.matches?.length:value.value?.items?.length??value.value?.issues?.length??value.value?.decisions?.length;if(name==='chat'&&phase==='prepare-banks')entry.result=value.value;return value;}
    catch(error){entry.ok=false;entry.error=error.message;throw error;}
    finally{entry.durationMs=Math.round(performance.now()-started);}
   };
@@ -37,12 +39,42 @@ async function responseJson(response,label){const text=await response.text();ass
 const get=async path=>responseJson(await context.request.get(base+'/api'+path,{timeout:180000}),path);
 const postResponse=path=>page.waitForResponse(response=>response.url()===base+'/api'+path&&response.request().method()==='POST',{timeout:180000});
 const waitGameChange=(selector,id)=>page.waitForFunction(({selector,id})=>{const next=document.querySelector(selector)?.dataset.gameId;return Boolean(next)&&next!==id;},{selector,id},{timeout:15000});
+function compactCorrection(original,replacement){
+ const before=original.trim().replace(/[.!?]+$/,'').split(/\s+/),after=replacement.trim().replace(/[.!?]+$/,'').split(/\s+/);
+ while(before.length>1&&after.length>1&&before[0]===after[0]){before.shift();after.shift();}
+ while(before.length>1&&after.length>1&&before.at(-1)===after.at(-1)){before.pop();after.pop();}
+ return [before.join(' '),after.join(' ')];
+}
+const wordInventory=text=>(text.toLowerCase().match(/[\p{L}\p{N}]+(?:['’][\p{L}]+)*/gu)||[]).sort();
+function assertGrammarSource(issue,item){
+ const expected=report.selectedCorrections.find(correction=>correction.issueId===issue.id);
+ assert.ok(expected,'Every grammar exercise uses one of the three actual selected review corrections');
+ assert.deepEqual(compactCorrection(issue.original,issue.replacement),[expected.original,expected.replacement],'The persisted source retains the real reviewed grammar correction');
+ assert.deepEqual(compactCorrection(item.original,item.replacement),[expected.original,expected.replacement],'Practice retains the complete reviewed grammar change');
+ assert.equal(item.category||issue.category,expected.category,'Practice retains the grammar category');
+ if(Object.hasOwn(item,'sourceOffset')){
+  const relative=item.sourceOffset-issue.offset;
+  assert.ok(relative>=0&&relative+item.sourceLength<=issue.length,'The source exercise target stays inside its reviewed span');
+  assert.equal(issue.original.slice(relative,relative+item.sourceLength),item.original,'The source exercise target matches the saved review offsets');
+ }
+ if(expected.category==='word_order'){
+  assert.deepEqual(wordInventory(item.original),wordInventory(item.replacement),'Word-order practice moves the existing words without dropping or inventing a verb');
+  assert.ok(wordInventory(item.original).length>1,'Word-order practice retains a complete movable phrase');
+ }
+}
+function assertCompletedGrammarCoverage(games,mode){
+ if(!grammarScenario)return;
+ assert.deepEqual([...new Set(games.map(game=>game.issueId))].sort(),report.selectedCorrections.map(correction=>correction.issueId).sort(),mode+' actually plays all three selected grammar corrections');
+ for(const game of games){assert.equal(store.game(game.id).completed,true);assertGrammarSource(store.issue(game.issueId),game.privateData.item);}
+ assert.ok(games.some(game=>!Object.hasOwn(game.privateData.item,'sourceOffset')),mode+' actually plays fresh model-generated practice');
+ report.rounds[mode+'Coverage']=games.map(game=>({gameId:game.id,issueId:game.issueId,category:game.privateData.item.category||store.issue(game.issueId).category,original:game.privateData.item.original,replacement:game.privateData.item.replacement,generated:!Object.hasOwn(game.privateData.item,'sourceOffset')}));
+}
 function align(game){
  assert.ok(game,'The UI refers to a persisted game');
  assert.ok(report.sourcePairs.some(pair=>pair.id===game.issueId),'Every exercise comes from this actual review');
  const issue=store.issue(game.issueId),item=game.privateData.item,bank=store.getBank(game.issueId);
- assert.equal(item.original,issue.original,'The exercise retains its reviewed target');
- assert.equal(item.replacement,issue.replacement,'The exercise uses the persisted, revalidated correction');
+ if(grammarScenario)assertGrammarSource(issue,item);
+ else{assert.equal(item.original,issue.original,'The exercise retains its reviewed target');assert.equal(item.replacement,issue.replacement,'The exercise uses the persisted, revalidated correction');}
  assert.equal(item.bad.slice(item.targetOffset,item.targetOffset+item.targetLength),item.original);
  assert.equal(item.bad.slice(0,item.targetOffset)+item.replacement+item.bad.slice(item.targetOffset+item.targetLength),item.good,'Only the intended correction produces the good sentence');
  assert.ok(bank.items.some(candidate=>candidate.bad===item.bad&&candidate.good===item.good),'The exercise belongs to the real verified bank');
@@ -54,7 +86,7 @@ function xpBefore(game,correct,{hint=false}={}){
 function recordAttempt(game,result,expectedXp){
  assert.equal(result.xpEarned,expectedXp,'XP follows the persisted reward key and help status');
  const saved=store.game(game.id);assert.equal(saved.completed,result.completed);
- report.attempts.push({gameId:game.id,issueId:game.issueId,mode:game.mode,exerciseKey:game.exerciseKey,original:game.privateData.item.original,replacement:game.privateData.item.replacement,bad:game.privateData.item.bad,good:game.privateData.item.good,generated:!Object.hasOwn(game.privateData.item,'sourceOffset'),correct:result.correct,completed:result.completed,outcome:result.outcome,assisted:result.assisted,xpEarned:result.xpEarned,arcadePoints:result.arcadePoints});
+ report.attempts.push({gameId:game.id,issueId:game.issueId,mode:game.mode,category:game.privateData.item.category||store.issue(game.issueId).category,exerciseKey:game.exerciseKey,original:game.privateData.item.original,replacement:game.privateData.item.replacement,bad:game.privateData.item.bad,good:game.privateData.item.good,generated:!Object.hasOwn(game.privateData.item,'sourceOffset'),correct:result.correct,completed:result.completed,outcome:result.outcome,assisted:result.assisted,xpEarned:result.xpEarned,arcadePoints:result.arcadePoints});
 }
 function assertTotals(){
  const attempts=report.attempts,totals=store.progress().totals;
@@ -64,7 +96,10 @@ function assertTotals(){
 async function openMode(title){const received=postResponse('/practice-rounds');await page.locator('.mode-card').filter({has:page.getByRole('heading',{name:title,exact:true})}).click();return responseJson(await received,title);}
 async function startRadar(){if(await page.locator('.radar-start').isVisible())await page.locator('.radar-start').click();}
 const wrongTokens=game=>game.privateData.tokens.filter(token=>token.offset+token.length<=game.privateData.item.targetOffset||token.offset>=game.privateData.item.targetOffset+game.privateData.item.targetLength);
-const targetToken=game=>game.privateData.tokens.find(token=>token.offset<game.privateData.item.targetOffset+game.privateData.item.targetLength&&token.offset+token.length>game.privateData.item.targetOffset);
+const targetToken=game=>{
+ const targets=game.privateData.tokens.filter(token=>token.offset<game.privateData.item.targetOffset+game.privateData.item.targetLength&&token.offset+token.length>game.privateData.item.targetOffset);
+ return (game.privateData.item.category||store.issue(game.issueId).category)==='word_order'?targets.find(token=>/^is[.!?]?$/i.test(token.text))||targets[0]:targets[0];
+};
 async function shoot(game,token,correct){
  await page.waitForFunction(({id,tokenId})=>document.querySelector('.guided-radar-session')?.dataset.gameId===id&&document.querySelector(`.radar-target[data-token-id="${tokenId}"]`)?.disabled===false,{id:game.id,tokenId:token.id});
  const expected=xpBefore(store.game(game.id),correct,{hint:store.game(game.id).state.help==='hint'}),received=postResponse('/games/'+game.id+'/attempt');
@@ -100,37 +135,42 @@ try{
  });
  page.on('response',response=>{if(response.url().startsWith(base+'/api/')&&response.status()>=400)report.apiFailures.push({url:response.url(),status:response.status()});});
  await page.goto(base);await page.getByText('IA local lista',{exact:true}).waitFor();
- phase='review';log('Real UI review started');
+ phase='review';log('Real UI review started: '+fixture.name+', '+sourceText.split(/\s+/).length+' words');
  await page.getByLabel('Tu espacio para escribir').fill(sourceText);
  const reviewReceived=postResponse('/analyze');await page.getByRole('button',{name:'Revisar mi texto',exact:true}).click();
  const review=await responseJson(await reviewReceived,'Real review');
  assert.equal(review.status,'issues');assert.equal(review.originalText,sourceText);
- report.correctedText=review.correctedText;report.sourcePairs=review.issues.map(({id,original,replacement,category,explanation})=>({id,original,replacement,category,explanation}));
- for(const [original,replacement]of [['freind','friend'],['tha','that'],['importan','important']])assert.ok(review.issues.some(issue=>issue.original===original&&issue.replacement===replacement),'The real review corrects '+original+' → '+replacement);
- assert.equal(review.correctedText.replaceAll('does not',"doesn't"),"Yesterday I went to the park with my friend. She doesn't like coffee. We have two dogs. I think that this book is important.",'The simple passage is corrected without changing its meaning or vocabulary');
+ report.correctedText=review.correctedText;report.sourcePairs=review.issues.map(({id,offset,length,sentence,original,replacement,category,explanation})=>({id,offset,length,sentence,original,replacement,category,explanation}));
+ for(const [original,replacement]of fixture.spellingPairs)assert.ok(review.issues.some(issue=>issue.original===original&&issue.replacement===replacement),'The real review corrects '+original+' → '+replacement);
+ for(const sentence of fixture.preservedSentences||[])assert.ok(review.correctedText.includes(sentence),'The review preserves correct simple English: '+sentence);
+ assert.equal(review.correctedText.replaceAll('does not',"doesn't"),fixture.correctedText,'The entire passage is corrected without changing its meaning or vocabulary');
  assert.equal(await page.getByLabel('Tu espacio para escribir').inputValue(),sourceText);
  await page.locator('.correction-row').first().waitFor();await page.screenshot({path:resolve(root,'review.png'),fullPage:true});
  assert.ok(report.engineCalls.some(call=>call.phase==='review'&&call.method==='chat'&&call.ok));
  log('Real review complete: '+JSON.stringify(report.sourcePairs.map(({original,replacement})=>[original,replacement])));
  phase='prepare-banks';
- const selected=['freind','tha','importan'].map(original=>review.issues.find(issue=>issue.original===original));
+ const selected=fixture.selected.map(expected=>{
+  const issue=review.issues.find(issue=>(!expected.category||issue.category===expected.category)&&(!expected.sentence||issue.sentence===expected.sentence)&&JSON.stringify(compactCorrection(issue.original,issue.replacement))===JSON.stringify([expected.original,expected.replacement]));
+  assert.ok(issue,'The actual review includes '+(expected.category||'spelling')+': '+expected.original+' → '+expected.replacement);return issue;
+ });
+ report.selectedCorrections=selected.map((issue,index)=>({issueId:issue.id,...fixture.selected[index]}));
  for(const issue of selected){
   log('Generating and validating real bank for '+issue.original+' → '+issue.replacement);
   const before=report.engineCalls.length;
   const prepared=await responseJson(await context.request.post(base+'/api/games',{headers:{'x-mistakequest':'1'},data:{issueId:issue.id,mode:'repair'},timeout:180000}),'Real bank preparation');
   assert.equal(prepared.mode,'repair');assert.equal(prepared.issueId,issue.id);
-  const game=store.game(prepared.id),bank=store.getBank(issue.id);align(game);
+  const game=store.game(prepared.id),bank=store.getBank(issue.id);report.preparedBanks.push({issueId:issue.id,gameId:game.id,source:bank?.source,items:bank?.items,engineCalls:report.engineCalls.length-before});align(game);
   assert.equal(bank.validatorVersion,10);assert.ok(bank.items.length>=3,'The real bank provides at least three verified sentences');
+  if(grammarScenario){assert.ok(new Set(bank.items.map(item=>item.good)).size>=3,'The real grammar bank provides at least three different verified sentences');for(const item of bank.items)assertGrammarSource(store.issue(issue.id),item);}
   assert.ok(bank.items.some(item=>!Object.hasOwn(item,'sourceOffset')&&item.bad!==issue.sentence),'The run produces fresh model-generated practice sentences');
   assert.ok(report.engineCalls.slice(before).some(call=>call.method==='chat'&&call.ok),'Each prepared bank actually uses the local model');
   assert.equal(game.completed,false);assert.equal(count('attempts'),0);assert.equal(count('completions'),0);assert.equal(count('rewards'),0);
-  report.preparedBanks.push({issueId:issue.id,gameId:game.id,source:bank.source,items:bank.items,engineCalls:report.engineCalls.length-before});
   log('Verified bank ready: '+issue.original+', '+bank.items.length+' sentences');
  }
  assert.equal(count('banks'),3);assert.deepEqual(assertTotals().xp,0);
  log('All three real correction banks are ready; starting Radar first');
- await page.locator('.correction-row').filter({has:page.locator('del').filter({hasText:/^freind$/})}).getByRole('button',{name:'Practicar este error',exact:true}).click();
- assert.equal(await page.locator('.practice-source del').innerText(),'freind');
+ await page.locator('.correction-row').filter({has:page.getByText(selected[0].original,{exact:true})}).getByRole('button',{name:'Practicar este error',exact:true}).click();
+ assert.equal(await page.locator('.practice-source del').innerText(),selected[0].original);
  phase='radar';const radarRound=await openMode('Radar de errores'),radar=page.locator('.guided-radar-session');await radar.waitFor();
  assert.equal(radarRound.total,3);assert.equal(new Set(planFor(radarRound.id).map(entry=>entry.issueId)).size,3);
  const radarGames=[];
@@ -152,6 +192,7 @@ try{
  await page.locator('.guided-radar-summary').waitFor();
  assert.equal(await page.locator('.guided-radar-summary').getAttribute('data-correct'),'1');assert.equal(await page.locator('.guided-radar-summary').getAttribute('data-assisted'),'1');assert.equal(await page.locator('.guided-radar-summary').getAttribute('data-revealed'),'1');
  const radarComplete=await get('/practice-rounds/'+radarRound.id);assert.equal(radarComplete.complete,true);assert.equal(radarComplete.completedCount,3);assert.equal(radarComplete.xpEarned,30);
+ assertCompletedGrammarCoverage(radarGames,'radar');
  assert.deepEqual(radarComplete.stats,{correct:2,wrong:0,missed:0,assisted:1,exhausted:1});assertTotals();
  const nextRadarReceived=postResponse('/practice-rounds');await page.locator('.guided-radar-again').click();const nextRadar=await responseJson(await nextRadarReceived,'Actual Radar Again action');
  assert.notEqual(nextRadar.id,radarRound.id);const radarReviews=planFor(nextRadar.id).filter(entry=>entry.kind==='review');
@@ -183,6 +224,7 @@ try{
  }
  const summary=page.locator('.practice-round-summary');await summary.waitFor();assert.equal(await summary.getAttribute('data-correct'),'7');assert.equal(await summary.getAttribute('data-wrong'),'2');assert.equal(await summary.getAttribute('data-missed'),'1');assert.equal(await runner.getAttribute('data-round-complete'),'true');
  const runnerComplete=await get('/practice-rounds/'+runnerRound.id);assert.equal(runnerComplete.complete,true);assert.equal(runnerComplete.completedCount,10);assert.equal(runnerComplete.game,null);assert.equal(runnerComplete.points,690);assert.equal(runnerComplete.xpEarned,runnerXp);assert.deepEqual(runnerComplete.stats,{correct:7,wrong:2,missed:1,assisted:0,exhausted:0});
+ assertCompletedGrammarCoverage(runnerGames,'runner');
  const gamesAtSummary=count('games'),totalsAtSummary=assertTotals();await page.waitForTimeout(1600);assert.equal(count('games'),gamesAtSummary,'Ten settled doors never create an eleventh game');assert.deepEqual(store.progress().totals,totalsAtSummary);assert.equal(store.db.prepare("SELECT COUNT(*) n FROM games WHERE mode='choice'").get().n,10);assert.equal(nextRequests.filter(request=>request.url.includes(runnerRound.id)).length,9);
  await page.screenshot({path:resolve(root,'runner-summary.png'),fullPage:true});
  const nextRunnerReceived=postResponse('/practice-rounds');await page.locator('.runner-next-round').click();const nextRunner=await responseJson(await nextRunnerReceived,'Actual next-runner action');

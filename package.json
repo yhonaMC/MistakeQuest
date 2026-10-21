@@ -12,6 +12,7 @@
     "test": "node --test tests/*.test.js",
     "test:live": "node tests/live-engines.mjs",
     "test:live:arcade": "node tests/live-arcade-browser.mjs",
+    "test:live:grammar": "node tests/live-arcade-browser.mjs --grammar",
     "test:e2e": "node tests/browser.mjs",
     "test:arcade": "node tests/arcade-language-browser.mjs && node tests/runner-variety-browser.mjs && node tests/continuous-runner-browser.mjs && node tests/adaptive-rounds-browser.mjs && node tests/guided-radar-browser.mjs",
     "setup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Install-Engines.ps1"

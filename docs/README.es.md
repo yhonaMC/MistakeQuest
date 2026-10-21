@@ -92,9 +92,11 @@ Cerrar la pestaña deja el servicio y los motores funcionando. Usa el acceso par
 3. **Elige un error para practicar.** Pulsa **Practicar este error** y escoge un juego. La práctica siempre es opcional.
 4. **Construye un hábito útil.** Vuelve desde **Mi progreso**, continúa una ronda guardada o practica de nuevo un error recurrente.
 
-La revisión combina una evaluación independiente de la IA con candidatos de LanguageTool, comprueba que los cambios coincidan con el original y filtra las preferencias de estilo opcionales. Los textos largos se revisan por fragmentos. Las correcciones compuestas se separan en objetivos más pequeños para practicar. Los casos ambiguos pueden conservarse con un aviso de duda.
+La revisión combina una evaluación independiente de la IA con candidatos de LanguageTool, comprueba que los cambios coincidan con el original y filtra las preferencias de estilo opcionales. Los textos largos se revisan por fragmentos. Las correcciones compuestas independientes se separan en objetivos más pequeños; un cambio de orden se conserva completo para que mover un verbo no se convierta en ejercicios separados de borrarlo y añadirlo. Las palabras de alrededor que no cambian quedan fuera del objetivo. Los casos ambiguos pueden conservarse con un aviso de duda.
 
 Cada ejemplo de práctica debe reproducir una corrección específica. LanguageTool o una revisión independiente de la IA lo comprueban antes de incorporarlo al banco persistente. Los juegos priorizan las frases menos vistas entre todos los formatos; si falla la generación adicional, siguen disponibles los ejemplos ya comprobados. Las correcciones históricas se revisan antes de practicar: si el fragmento ya estaba bien, deja de proponerse como error recurrente sin crear una partida ni XP ficticios.
+
+Para variar los ejercicios de orden, la IA genera contextos breves y la app inserta la corrección confirmada. Cada frase construida sigue pasando por la comprobación gramatical y la revisión independiente de la IA. Los bancos antiguos que separaron un cambio de orden se regeneran al abrir ese error. Las rondas arcade excluyen esos ejemplos divididos y conservan las revisiones, los intentos, las recompensas y los puntos guardados.
 
 **Sugerir una mejora** solo se ejecuta cuando lo pides. Puede concluir que no hace falta cambiar nada y nunca sustituye el borrador automáticamente.
 
@@ -253,6 +255,7 @@ No hay un script npm `dev`. `npm start` ejecuta el servicio con la compilación 
 | `npm test` | Pruebas unitarias y de API de Node: validación de revisiones, reglas de juegos, persistencia y recompensas. No necesita los motores reales. |
 | `npm run test:live` | Revisiones y juegos con Ollama, Qwen3 8B y LanguageTool reales. Enciende antes los motores. |
 | `npm run test:live:arcade` | Parte de una base vacía, revisa el texto y genera ejemplos con los motores locales reales; después juega diez puertas y una sesión de Radar guiado. Verifica el regreso de errores, el guardado tras reiniciar y la exportación. Requiere compilación actual, motores y Microsoft Edge; elige su propio puerto local. |
+| `npm run test:live:grammar` | Repite el flujo de navegador con motores reales y un texto más largo. Ambos juegos completos deben usar correcciones reales de concordancia, forma verbal y orden de palabras, con frases nuevas generadas. Comprueba que el inglés sencillo correcto se conserve y que el progreso sobreviva al reinicio. Requiere lo mismo que `test:live:arcade`. |
 | `npm run test:e2e` | Flujo con motores reales desde la revisión hasta los seis juegos, persistencia tras reiniciar y diseño móvil. Requiere compilación actual, motores, Microsoft Edge instalado y puerto `3211` libre. |
 | `npm run test:arcade` | Los seis formatos, ES/EN, variedad, vuelo continuo, rondas guardadas, puntos e intentos de Radar. Usa datos aislados y motores simulados; requiere compilación actual y Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | Render 3D, controles persistentes de movimiento, selección por teclado, tamaños móviles y respaldo sin WebGL. Simula la disponibilidad de motores; requiere compilación, Microsoft Edge y puerto `3212` libre. |
@@ -264,6 +267,8 @@ Las pruebas de navegador seleccionan el canal de **Microsoft Edge** instalado me
 `npm run test:arcade` también comprueba el límite de diez puertas, los repasos de respuestas incorrectas y puertas omitidas, el regreso de errores agotados o resueltos con pistas en Radar, la recuperación desde Mi progreso y el componente de Radar guiado. La suite unitaria cierra y vuelve a abrir archivos SQLite reales para verificar pistas, intentos, colas de repaso y reintentos sin duplicar XP ni puntos.
 
 Para comprobar el flujo completo desde la IA hasta los juegos, usa `npm run test:live:arcade`. No prepara correcciones ni bancos de ejemplos de antemano y no sustituye las respuestas de los motores por datos simulados. El informe guarda el texto de prueba, las correcciones reales, las llamadas a los motores, los resultados de los juegos y el progreso en `test-results/live-arcade-*`.
+
+Usa `npm run test:live:grammar` para comprobar gramática y orden de palabras en un texto más largo. Verifica el párrafo corregido completo, las posiciones de origen, los cambios de orden completos, la variedad de frases generadas, los errores gramaticales jugados en ambos modos, el regreso de fallos, una sesión parcial de Radar y el progreso guardado y exportado exacto tras volver a abrir la app y SQLite. Los informes de `test-results/live-arcade-grammar-*` también incluyen las respuestas de generación para diagnosticar ejemplos rechazados. Los textos son ficticios y la prueba crea su propia base de datos.
 
 También hay comprobaciones específicas: `node tests/radar-arcade-browser.mjs`, `node tests/runner-arcade-browser.mjs` y `node tests/learner-paragraph.mjs --all`. La del párrafo usa motores reales y escribe en `test-results/`; crea esa carpeta antes si todavía no existe.
 

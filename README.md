@@ -92,9 +92,11 @@ Closing the browser tab leaves the service and engines running. Use the stop sho
 3. **Choose an error to practice.** Select **Practice this mistake**, then pick a game. Practice is always optional.
 4. **Build a useful habit.** Return through **My progress**, resume a saved round, or practice a recurring error again.
 
-The review pipeline combines an independent AI review with LanguageTool candidates, checks that edits match the original text, and filters optional style changes. Longer texts are reviewed in segments. Compound corrections are separated into smaller practice targets. Ambiguous cases can remain unchanged with an uncertainty notice.
+The review pipeline combines an independent AI review with LanguageTool candidates, checks that edits match the original text, and filters optional style changes. Longer texts are reviewed in segments. Independent compound corrections become smaller practice targets; a word-order repair stays together so moving a verb cannot become separate deletion and insertion exercises. Unchanged surrounding words remain outside the target. Ambiguous cases can remain unchanged with an uncertainty notice.
 
 Practice examples must reproduce a specific correction. LanguageTool or an independent AI review checks them before they enter the persistent example bank. Games prefer less-seen sentences across formats; if extra generation fails, already checked examples remain available. Historical corrections are checked again before practice: if a fragment was already correct, it is retired from recurring-error practice without creating a game or artificial XP.
+
+For word-order variety, the AI generates short surrounding sentence frames and the app inserts the confirmed correction itself. Each assembled sentence still passes grammar and independent AI checks. Legacy example banks that split a word-order repair are rebuilt when that error is opened. Arcade rounds exclude those split examples while keeping your saved reviews, attempts, rewards, and points.
 
 **Suggest an improvement** is available only when requested. It may conclude that nothing needs changing and never replaces your draft automatically.
 
@@ -253,6 +255,7 @@ There is no `dev` npm script. `npm start` runs the service against the current `
 | `npm test` | Node unit and API tests, including review validation, game rules, persistence, and rewards. Does not require the real engines. |
 | `npm run test:live` | Real Ollama, Qwen3 8B, and LanguageTool review and game checks. Start the engines first. |
 | `npm run test:live:arcade` | Starts with an empty database, reviews text and generates examples with the real local engines, then plays a full ten-gate run and guided radar session. Checks returning mistakes, restart persistence, and export. Requires a current build, engines, and Microsoft Edge; chooses its own local port. |
+| `npm run test:live:grammar` | Runs the same real-engine browser flow with a longer learner passage. Both completed games must use actual agreement, verb-form, and word-order corrections, including newly generated sentences. Checks that valid simple sentences stay unchanged and that progress survives restart. Same prerequisites as `test:live:arcade`. |
 | `npm run test:e2e` | Real-engine browser flow through review and all six games, restart persistence, and mobile layout. Requires a current build, engines, installed Microsoft Edge, and free port `3211`. |
 | `npm run test:arcade` | Browser checks for six formats, ES/EN, round variety, continuous flight, saved rounds, scoring, and radar attempts. Uses isolated fixtures and simulated engines; requires a current build and Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | 3D rendering, persistent motion controls, keyboard selection, mobile sizing, and no-WebGL fallback. Uses simulated engine health; requires a build, Microsoft Edge, and free port `3212`. |
@@ -264,6 +267,8 @@ Browser tests select Playwright's installed **Microsoft Edge** channel (`msedge`
 `npm run test:arcade` also checks the ten-gate stop, reviews of wrong answers and missed gates, the next radar session's exhausted/assisted targets, partial-session recovery through My progress, and the guided radar component. The unit suite closes and reopens real SQLite files to verify saved hints, attempts, review queues, and retries without duplicate XP or points.
 
 For the complete AI-to-game flow, use `npm run test:live:arcade`. It does not seed corrections or example banks and does not replace engine responses with fixtures. Its report records the sample text, actual corrections, engine calls, game results, and saved progress under `test-results/live-arcade-*`.
+
+Use `npm run test:live:grammar` to exercise longer-text grammar and word order. It checks the full corrected passage, source offsets, complete reorder targets, generated sentence variety, both games' actual grammar coverage, returning mistakes, a partially played Radar session, and exact saved/exported progress after reopening the app and SQLite. Reports under `test-results/live-arcade-grammar-*` also include parsed generation responses for diagnosing rejected examples. All passages are synthetic and the test creates its own database.
 
 Additional focused checks include `node tests/radar-arcade-browser.mjs`, `node tests/runner-arcade-browser.mjs`, and `node tests/learner-paragraph.mjs --all`. The paragraph check uses real engines and writes under `test-results/`; create that directory first if it does not exist.
 

@@ -117,6 +117,7 @@ La IA todavía puede omitir errores o proponer cambios incorrectos. Las comproba
 | **Conecta parejas** | Une cada frase con su corrección. |
 | **¿Se queda o se corrige?** | Decide si una frase necesita un cambio y aprende también a reconocer el inglés válido. |
 | **Salto orbital** | Salta entre plataformas y aterriza en la corrección verificada. |
+| **Laberinto de palabras** | Explora los pasillos, recoge palabras y comprueba tu frase en la salida. |
 
 ### Salto orbital: correcciones verificadas y aterrizajes reales
 
@@ -125,6 +126,14 @@ Usa **← / →** o **A / D** para moverte, **Espacio** para saltar o los contro
 Cada aventura utiliza hasta **tres frases verificadas distintas** del error elegido. Cada aterrizaje correcto guarda un checkpoint. Las caídas se guardan aparte como tropiezos de movimiento: nunca suman errores de inglés ni restan XP. Puedes pausar cuando quieras y no hay un tiempo obligatorio para responder. Continúa la misma aventura desde **Mi progreso**, incluso después de cerrar el navegador o reiniciar la app.
 
 Las pistas y soluciones de inglés mantienen las recompensas finales existentes. El servidor evalúa la respuesta y entrega la recompensa final una sola vez. Las acciones de movimiento tienen registros duraderos de idempotencia separados de los intentos de inglés; **Comprobar de nuevo** recupera una respuesta o movimiento cuya confirmación se perdió.
+
+### Laberinto de palabras: explora, recoge y comprueba
+
+Usa las **flechas / WASD** o la cruceta táctil para recorrer el laberinto casilla a casilla. Detente sobre una palabra y pulsa **Espacio** o **Recoger palabra** para añadirla a tu frase de viaje. Pasar por encima no la recoge ni envía una respuesta de inglés. Las insignias del mapa corresponden a las palabras completas de la leyenda numerada; las palabras repetidas conservan identificadores distintos.
+
+Recoge todas las palabras en el orden que quieras probar y llega a la **Salida** iluminada. Pulsa **Comprobar frase** o **Espacio** para enviar un intento de inglés. **Deshacer** devuelve la última palabra recogida al mapa; **Reiniciar** vacía la frase actual y te devuelve al inicio, también después de una respuesta incorrecta.
+
+El dron visible patrulla los pasillos mientras juegas. Las casillas de palabras, el inicio y la salida son seguras, y leer no suma tropiezos de movimiento. Un contacto te devuelve al inicio conservando tus palabras y los checkpoints terminados; nunca cuenta como error de inglés ni resta XP. El servicio guarda la posición, el inventario y hasta tres checkpoints de frases verificadas. La pausa, el movimiento reducido, la ayuda y la continuación desde **Mi progreso** funcionan como en Salto orbital.
 
 ### Dos caminos: diez puertas y la opción de continuar
 
@@ -270,13 +279,16 @@ No hay un script npm `dev`. `npm start` ejecuta el servicio con la compilación 
 | `npm run test:adventure:jump` | Flujo real de navegador y servicio: checkpoints, aterrizajes incorrectos/correctos, caídas sin errores de inglés, recuperación de respuestas, continuación y recompensas. Usa un banco verificado aislado; necesita compilación actual y Edge. |
 | `npm run test:jump:board` | Física manual de plataformas, controles táctiles, pausa, ayuda, movimiento reducido y legibilidad a 320px en un componente aislado. |
 | `npm run test:live:jump` | Revisión y creación de bancos con IA local real, dos aventuras basadas en correcciones reales, idempotencia de movimientos/respuestas y guardado exacto tras reiniciar SQLite. Requiere los motores locales activos. |
+| `npm run test:adventure:maze` | Navegador y servicio reales: exploración, recogida explícita, frases incorrectas/correctas, reinicio, inventario guardado tras reiniciar y recompensa final. Usa un banco verificado aislado y Microsoft Edge. |
+| `npm run test:maze:board` | Componente con datos ficticios: movimiento autorizado por el servicio con teclado y pulsación táctil mantenida, recogida, deshacer, contacto de dron sin intento de inglés, pausa, movimiento reducido, palabras largas y ES/EN a 320px. Necesita Microsoft Edge. |
+| `npm run test:live:maze` | Revisión y bancos con IA local real, dos laberintos basados en correcciones reales, recogida de palabras alcanzables, idempotencia de recompensas y guardado exacto tras reiniciar SQLite. Requiere los motores locales activos. |
 | `npm run test:live` | Revisiones y juegos con Ollama, Qwen3 8B y LanguageTool reales. Enciende antes los motores. |
 | `npm run test:live:arcade` | Parte de una base vacía, revisa el texto y genera ejemplos con los motores locales reales; después juega diez puertas y una sesión de Radar guiado. Verifica el regreso de errores, el guardado tras reiniciar y la exportación. Requiere compilación actual, motores y Microsoft Edge; elige su propio puerto local. |
 | `npm run test:live:grammar` | Repite el flujo de navegador con motores reales y un texto más largo. Ambos juegos completos deben usar correcciones reales de concordancia, forma verbal y orden de palabras, con frases nuevas generadas. Comprueba que el inglés sencillo correcto se conserve y que el progreso sobreviva al reinicio. Requiere lo mismo que `test:live:arcade`. |
 | `npm run test:live:classic` | Revisa el mismo texto largo con los motores reales y completa Taller de palabras, Arma la frase, Conecta parejas y ¿Se queda o se corrige? para tres correcciones gramaticales reales. Verifica respuestas incorrectas, pistas, soluciones, ejemplos generados, una partida parcial de parejas durante un reinicio del servicio y el progreso final tras recargar. Requiere lo mismo que `test:live:arcade`. |
 | `npm run test:classic:retry` | Comprueba la recuperación de respuestas perdidas en el componente clásico real y un servicio aislado: claves de reintento estables, avance de preguntas, parejas conectadas y recompensas de XP únicas. Usa bancos ficticios verificados y no llama a la IA; requiere Microsoft Edge. Incluido también en `test:arcade`. |
 | `npm run test:e2e` | Flujo con motores reales desde la revisión hasta los seis juegos originales, persistencia tras reiniciar y diseño móvil. Requiere compilación actual, motores, Microsoft Edge instalado y puerto `3211` libre. |
-| `npm run test:arcade` | Los seis formatos, ES/EN, variedad, vuelo continuo, rondas guardadas, puntos e intentos de Radar. Usa datos aislados y motores simulados; requiere compilación actual y Microsoft Edge. |
+| `npm run test:arcade` | Los seis formatos clásicos más Salto orbital y Laberinto de palabras, ES/EN, variedad, vuelo continuo, rondas guardadas, puntos e intentos de Radar. Usa datos aislados y motores simulados; requiere compilación actual y Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | Render 3D, controles persistentes de movimiento, selección por teclado, tamaños móviles y respaldo sin WebGL. Simula la disponibilidad de motores; requiere compilación, Microsoft Edge y puerto `3212` libre. |
 | `node tests/writing-layout-browser.mjs` | Tamaño, foco y selección del editor durante la revisión en escritorio y móvil. Requiere Microsoft Edge. |
 | `node tests/practice-status-browser.mjs` | Retirada de falsos positivos históricos mediante la API real, una base aislada y sin llamadas a la IA. Requiere compilación, Microsoft Edge y puerto `3213` libre. |

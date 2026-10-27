@@ -18,8 +18,11 @@
     "test:adventure:jump": "node tests/adventure-browser.mjs jump",
     "test:jump:board": "node tests/jump-board-browser.mjs",
     "test:live:jump": "node tests/live-adventures.mjs jump",
+    "test:adventure:maze": "node tests/adventure-browser.mjs maze",
+    "test:maze:board": "node tests/maze-board-browser.mjs",
+    "test:live:maze": "node tests/live-adventures.mjs maze",
     "test:e2e": "node tests/browser.mjs",
-    "test:arcade": "node tests/arcade-language-browser.mjs && node tests/runner-variety-browser.mjs && node tests/continuous-runner-browser.mjs && node tests/adaptive-rounds-browser.mjs && node tests/guided-radar-browser.mjs && node tests/classic-retry-browser.mjs && node tests/jump-board-browser.mjs && node tests/adventure-browser.mjs jump",
+    "test:arcade": "node tests/arcade-language-browser.mjs && node tests/runner-variety-browser.mjs && node tests/continuous-runner-browser.mjs && node tests/adaptive-rounds-browser.mjs && node tests/guided-radar-browser.mjs && node tests/classic-retry-browser.mjs && node tests/jump-board-browser.mjs && node tests/adventure-browser.mjs jump && node tests/maze-board-browser.mjs && node tests/adventure-browser.mjs maze",
     "setup": "powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/Install-Engines.ps1"
   },
   "dependencies": {

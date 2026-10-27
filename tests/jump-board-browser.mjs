@@ -19,15 +19,15 @@ try{
  const answers=async()=>JSON.parse(await page.locator('#answers').textContent());
  const actions=async()=>JSON.parse(await page.locator('#actions').textContent());
  const actor=async()=>({x:Number(await board.getAttribute('data-player-x')),y:Number(await board.getAttribute('data-player-y'))});
- async function fresh(id){await page.evaluate(id=>{window.jumpHarness.setGame({...window.jumpHarness.initial,id});window.jumpHarness.setPaused(false);window.jumpHarness.setDisabled(false);},id);await page.waitForFunction(()=>document.querySelector('.jump-arcade')?.dataset.phase==='playing');await field.focus();}
+ async function fresh(id){await page.evaluate(id=>{window.jumpHarness.setGame({...window.jumpHarness.initial,id});window.jumpHarness.setPaused(false);window.jumpHarness.setDisabled(false);},id);await page.waitForFunction(id=>document.querySelector('main')?.dataset.gameId===id&&document.querySelector('.jump-arcade')?.dataset.phase==='playing'&&document.querySelector('.jump-arcade')?.dataset.platform==='spawn',id);await field.focus();}
  async function manualLand(index){
-  const key=index===0?'ArrowLeft':'ArrowRight';
+  const key=index===0?'ArrowLeft':'ArrowRight',previousAnswers=(await answers()).length;
   await field.focus();await page.keyboard.down(key);await page.keyboard.press('Space');
   await page.waitForFunction(platform=>document.querySelector('.jump-arcade')?.dataset.platform===platform,index===0?'step-left':'step-right',{timeout:3000});
   await page.keyboard.up(key);
   const step=await actor();assert.ok(step.y<400,'A real jump reaches the neutral stone');
   await page.keyboard.down(key);await page.keyboard.press('Space');
-  await page.waitForFunction(()=>document.querySelector('.jump-arcade')?.dataset.phase==='waiting',{timeout:3000});
+  await page.waitForFunction(count=>JSON.parse(document.querySelector('#answers').textContent).length===count+1,previousAnswers,{timeout:3000});
   await page.keyboard.up(key);
  }
  assert.equal(await page.locator('.jump-option').count(),2);

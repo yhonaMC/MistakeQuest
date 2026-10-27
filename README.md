@@ -117,6 +117,7 @@ AI can still miss errors or suggest an incorrect change. These checks reduce tha
 | **Connect pairs** · Conecta parejas | Match sentences with their corrections. |
 | **Keep it or correct it?** · ¿Se queda o se corrige? | Decide whether a sentence needs a change, including recognizing valid English. |
 | **Orbital jump** · Salto orbital | Jump between platforms and land on the verified correction. |
+| **Word maze** · Laberinto de palabras | Explore corridors, collect words and check your sentence at the exit. |
 
 ### Orbital jump: verified corrections, real landings
 
@@ -125,6 +126,14 @@ Use **← / →** or **A / D** to move, **Space** to jump, or the touch controls
 Each adventure uses up to **three different verified sentences** for the chosen writing error. Every correct landing saves a checkpoint. Falls are saved separately as movement slips and never become English mistakes or remove XP. Pause whenever you want; there is no forced answer timer. Continue the same adventure from **My progress**, including after closing the browser or restarting the app.
 
 English hints and reveals use the existing final reward rules. The server grades the answer and credits the final reward once. Movement actions have their own durable idempotency records, separate from English attempts; a lost answer or movement response can be recovered with **Check again**.
+
+### Word maze: explore, collect, then check
+
+Use **arrow keys / WASD** or the touch D-pad to move through the maze one cell at a time. Stop on a word tile and press **Space** or **Collect word** to add it to your travelling sentence. Walking over a word does not collect it or submit an English answer. Map badges correspond to the full words in the numbered legend; repeated words keep distinct token IDs.
+
+Collect every word in the order you want to try, then reach the glowing **Exit** and choose **Check sentence** or press **Space**. Only that explicit exit check is an English attempt. **Undo** returns the last collected word to the map; **Reset** clears the current sentence and returns you to the start, including after an incorrect answer.
+
+The visible drone patrols corridors while you play. Word, spawn and exit tiles are safe, and reading does not consume movement slips. A contact returns you to the start while preserving collected words and finished checkpoints; it never counts as an English mistake or reduces XP. Position, inventory and up to three verified sentence checkpoints are saved by the service. Pause, reduced motion, assistance and continuing from **My progress** work as in Orbital jump.
 
 ### Two paths: ten gates, then a choice to continue
 
@@ -270,13 +279,16 @@ There is no `dev` npm script. `npm start` runs the service against the current `
 | `npm run test:adventure:jump` | Actual browser/service flow for jump checkpoints, wrong/right landings, motor-only falls, lost-response recovery, saved-game resume and rewards. Uses an isolated verified bank; requires a current build and Edge. |
 | `npm run test:jump:board` | Manual platform physics, touch, pause, assistance, reduced motion and 320px readability in an isolated component. |
 | `npm run test:live:jump` | Real local-AI review and bank creation, two jump adventures from actual corrections, movement/answer idempotence and exact SQLite restart persistence. Requires running local engines. |
+| `npm run test:adventure:maze` | Actual browser/service maze exploration, explicit collection, incorrect/correct sentence checks, reset, saved inventory after restart and final rewards. Uses an isolated verified bank and Microsoft Edge. |
+| `npm run test:maze:board` | Synthetic component fixture: authoritative keyboard and held touch movement, explicit collection, undo, motor-only drone contact, pause, reduced motion, long words and ES/EN at 320px. Requires Microsoft Edge. |
+| `npm run test:live:maze` | Real local-AI review and bank creation, two maze adventures from actual corrections, reachable word collection, reward idempotence and exact SQLite restart persistence. Requires running local engines. |
 | `npm run test:live` | Real Ollama, Qwen3 8B, and LanguageTool review and game checks. Start the engines first. |
 | `npm run test:live:arcade` | Starts with an empty database, reviews text and generates examples with the real local engines, then plays a full ten-gate run and guided radar session. Checks returning mistakes, restart persistence, and export. Requires a current build, engines, and Microsoft Edge; chooses its own local port. |
 | `npm run test:live:grammar` | Runs the same real-engine browser flow with a longer learner passage. Both completed games must use actual agreement, verb-form, and word-order corrections, including newly generated sentences. Checks that valid simple sentences stay unchanged and that progress survives restart. Same prerequisites as `test:live:arcade`. |
 | `npm run test:live:classic` | Reviews the same longer passage with real engines, then completes Word workshop, Build the sentence, Connect pairs, and Keep it or correct it? for three actual grammar corrections. Verifies wrong answers, hints, solutions, generated examples, a partial pairs game across a service restart, and final saved progress after reload. Same prerequisites as `test:live:arcade`. |
 | `npm run test:classic:retry` | Checks lost-response recovery in the actual classic game component and isolated service, including stable retry keys, question progression, connected pairs, and single XP rewards. Uses synthetic verified banks and no real AI; requires Microsoft Edge. Also included in `test:arcade`. |
 | `npm run test:e2e` | Real-engine browser flow through review and the six original games, restart persistence, and mobile layout. Requires a current build, engines, installed Microsoft Edge, and free port `3211`. |
-| `npm run test:arcade` | Browser checks for six formats, ES/EN, round variety, continuous flight, saved rounds, scoring, and radar attempts. Uses isolated fixtures and simulated engines; requires a current build and Microsoft Edge. |
+| `npm run test:arcade` | Browser checks for the six classic formats plus Orbital jump and Word maze, ES/EN, round variety, continuous flight, saved rounds, scoring, and radar attempts. Uses isolated fixtures and simulated engines; requires a current build and Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | 3D rendering, persistent motion controls, keyboard selection, mobile sizing, and no-WebGL fallback. Uses simulated engine health; requires a build, Microsoft Edge, and free port `3212`. |
 | `node tests/writing-layout-browser.mjs` | Editor size, focus, and selection through review on desktop and mobile. Requires Microsoft Edge. |
 | `node tests/practice-status-browser.mjs` | Historical false-positive retirement through the real API with an isolated database and no AI calls. Requires a build, Microsoft Edge, and free port `3213`. |

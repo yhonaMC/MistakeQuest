@@ -3,6 +3,9 @@ import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 export const LANGUAGE_KEY='mistakequest.interfaceLanguage';
 // Spanish is the source language. Add the English copy here, then call t(source, values).
 export const english={
+  'Laberinto de palabras':'Word maze','Explora, recoge las palabras y comprueba tu frase en la salida.':'Explore, collect the words and check your sentence at the exit.','Explora':'Explore',
+  'Recoge las palabras en orden y comprueba la frase en la salida.':'Collect the words in order and check the sentence at the exit.',
+  'Elige una dirección.':'Choose a direction.','Recoge todas las palabras en ese orden y llega a la salida.':'Collect every word in that order and reach the exit.',
   'Salta hasta la opción que corrige la frase y guarda cada punto de control.':'Jump to the option that corrects the sentence and save each checkpoint.',
   'La clave de esta acción ya se usó con otros datos.':'This action key was already used for different data.',
   'Salto orbital':'Orbital jump','Salta hasta la corrección y guarda cada checkpoint.':'Jump to the correction and save each checkpoint.','Salta':'Jump','Salta hasta la opción correcta sin cambiar el resto de la frase.':'Jump to the correct option without changing the rest of the sentence.',

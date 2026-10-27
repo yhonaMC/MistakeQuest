@@ -33,6 +33,7 @@ export class Store{
     CREATE TABLE IF NOT EXISTS banks(issue_id TEXT PRIMARY KEY REFERENCES issues(id) ON DELETE CASCADE,payload TEXT NOT NULL,model TEXT NOT NULL,created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS games(id TEXT PRIMARY KEY,issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,mode TEXT NOT NULL,exercise_key TEXT NOT NULL,private_data TEXT NOT NULL,public_data TEXT NOT NULL,state TEXT NOT NULL,completed INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS attempts(id TEXT PRIMARY KEY,game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,correct INTEGER NOT NULL,help TEXT NOT NULL,answer TEXT NOT NULL,response TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(game_id,idempotency_key));
+    CREATE TABLE IF NOT EXISTS game_actions(id TEXT PRIMARY KEY,game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,idempotency_key TEXT NOT NULL,request_hash TEXT NOT NULL,action TEXT NOT NULL,response TEXT NOT NULL,created_at TEXT NOT NULL,UNIQUE(game_id,idempotency_key));
     CREATE TABLE IF NOT EXISTS completions(game_id TEXT PRIMARY KEY REFERENCES games(id) ON DELETE CASCADE,xp INTEGER NOT NULL,created_at TEXT NOT NULL);
     CREATE TABLE IF NOT EXISTS rewards(exercise_key TEXT PRIMARY KEY,game_id TEXT NOT NULL REFERENCES games(id) ON DELETE CASCADE,xp INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS practice_rounds(id TEXT PRIMARY KEY,request_key TEXT NOT NULL UNIQUE,request_hash TEXT NOT NULL,issue_id TEXT NOT NULL REFERENCES issues(id) ON DELETE CASCADE,mode TEXT NOT NULL CHECK(mode IN ('choice','radar')),locale TEXT NOT NULL,previous_round_id TEXT REFERENCES practice_rounds(id) ON DELETE SET NULL,plan TEXT NOT NULL,position INTEGER NOT NULL DEFAULT 0,game_ids TEXT NOT NULL,stats TEXT NOT NULL,mix TEXT NOT NULL,points INTEGER NOT NULL DEFAULT 0,xp_earned INTEGER NOT NULL DEFAULT 0,time_limit_ms INTEGER NOT NULL DEFAULT 5000,created_at TEXT NOT NULL);
@@ -48,7 +49,20 @@ export class Store{
     return this.transaction(()=>{const found=this.db.prepare('SELECT id FROM analyses WHERE review_key=?').get(value.key),existing=found?this.analysis(found.id):null,version=value.reviewVersion||0;
       if(existing&&existing.reviewVersion>=version&&existing.status!=='uncertain')return existing;
       const id=existing?.id||randomUUID(),date=existing?.createdAt||stamp(),saveTexts=this.settings().saveTexts,retained=existing?.issues||[],additions=[];
-      const incoming=[...value.issues];
+      const incoming=[...value.issues];let unresolvedReorder=false;
+      // A verified reorder can replace a narrower old decision. Reuse its ID so
+      // historical games keep their immutable snapshots and foreign keys.
+      if(existing&&version>existing.reviewVersion)for(const issue of [...incoming]){
+        if(issue.category!=='word_order')continue;
+        const overlaps=retained.filter(prior=>issue.offset<prior.offset+prior.length&&prior.offset<issue.offset+issue.length);
+        if(overlaps.length!==1){if(overlaps.length)unresolvedReorder=true;continue;}const prior=overlaps[0];
+        if(prior.offset<issue.offset||prior.offset+prior.length>issue.offset+issue.length){unresolvedReorder=true;continue;}
+        if(prior.offset===issue.offset&&prior.length===issue.length)continue;
+        this.db.prepare('UPDATE issues SET offset=?,length=?,original=?,replacement=?,category=?,label=?,explanation=?,sentence=? WHERE id=?').run(issue.offset,issue.length,issue.original,issue.replacement,issue.category,issue.label||categoryLabels[issue.category],issue.explanation,issue.sentence.slice(0,700),prior.id);
+        this.db.prepare('DELETE FROM banks WHERE issue_id=?').run(prior.id);
+        Object.assign(prior,issue,{id:prior.id,label:issue.label||categoryLabels[issue.category]});
+        incoming.splice(incoming.indexOf(issue),1);
+      }
       if(existing&&version>existing.reviewVersion)for(const prior of retained){
         const contained=incoming.filter(issue=>issue.offset>=prior.offset&&issue.offset+issue.length<=prior.offset+prior.length);
         if(!contained.length||contained.every(issue=>issue.offset===prior.offset&&issue.length===prior.length))continue;
@@ -73,7 +87,7 @@ export class Store{
       const all=[...retained,...additions],status=all.length?'issues':value.status;
       if(existing){
         const original=saveTexts?value.originalText:existing.originalText,corrected=original!==null?applyEdits(value.originalText,all):null;
-        this.db.prepare('UPDATE analyses SET status=?,original_text=?,corrected_text=?,model=?,review_version=?,review_meta=? WHERE id=?').run(status,original,corrected,value.model||this.settings().model,version,json({uncertain:Boolean(value.uncertain),notices:value.notices||[]}),id);
+        this.db.prepare('UPDATE analyses SET status=?,original_text=?,corrected_text=?,model=?,review_version=?,review_meta=? WHERE id=?').run(status,original,corrected,value.model||this.settings().model,unresolvedReorder?existing.reviewVersion:version,json({uncertain:Boolean(value.uncertain),notices:value.notices||[]}),id);
       }else this.db.prepare('INSERT INTO analyses(id,review_key,created_at,locale,status,original_text,corrected_text,model,review_version,review_meta) VALUES (?,?,?,?,?,?,?,?,?,?)').run(id,value.key,date,value.locale,status,saveTexts?value.originalText:null,saveTexts?value.correctedText:null,value.model||this.settings().model,version,json({uncertain:Boolean(value.uncertain),notices:value.notices||[]}));
       const insert=this.db.prepare('INSERT INTO issues(id,analysis_id,category,label,offset,length,original,replacement,explanation,sentence,created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)');for(const issue of additions)insert.run(randomUUID(),id,issue.category,issue.label||categoryLabels[issue.category],issue.offset,issue.length,issue.original,issue.replacement,issue.explanation,issue.sentence.slice(0,700),date);
       return this.analysis(id);
@@ -94,9 +108,19 @@ export class Store{
   createGame(value){if(!this.issue(value.issueId))throw new AppError('ISSUE_NOT_FOUND','Este error ya no está en tu historial.',404);const id=randomUUID();this.db.prepare('INSERT INTO games VALUES (?,?,?,?,?,?,?,?,?)').run(id,value.issueId,value.mode,value.exerciseKey,json(value.privateData),json(value.publicData),json(value.state||{help:'none'}),0,stamp());return this.game(id);}
   game(id){const row=this.db.prepare('SELECT * FROM games WHERE id=?').get(id);return row?{id:row.id,issueId:row.issue_id,mode:row.mode,exerciseKey:row.exercise_key,privateData:parse(row.private_data),publicData:parse(row.public_data),state:parse(row.state),completed:Boolean(row.completed),createdAt:row.created_at}:null;}
   updateGameState(id,state){this.db.prepare('UPDATE games SET state=? WHERE id=?').run(json(state),id);}
-  submit(gameId,key,requestHash,evaluate){return this.transaction(()=>{
+  attemptResponse(gameId,key,requestHash){const row=this.db.prepare('SELECT request_hash,response FROM attempts WHERE game_id=? AND idempotency_key=?').get(gameId,key);if(!row)return null;if(requestHash&&row.request_hash!==requestHash)throw new AppError('REUSED_KEY','La clave de este intento ya se usó con otra respuesta.',409);return parse(row.response);}
+  performGameAction(gameId,key,requestHash,evaluate){return this.transaction(()=>{
+    const duplicate=this.db.prepare('SELECT request_hash,response FROM game_actions WHERE game_id=? AND idempotency_key=?').get(gameId,key);
+    if(duplicate){if(duplicate.request_hash!==requestHash)throw new AppError('REUSED_KEY','La clave de esta acción ya se usó con otros datos.',409);return parse(duplicate.response);}
+    const game=this.game(gameId);if(!game)throw new AppError('GAME_NOT_FOUND','Esta partida ya no está disponible.',404);
+    const event=evaluate(game);if(event.unchanged)return event.response;
+    this.updateGameState(gameId,event.state);
+    const response=json(event.response);this.db.prepare('INSERT INTO game_actions VALUES (?,?,?,?,?,?,?)').run(randomUUID(),gameId,key,requestHash,json(event.action??null),response,stamp());return parse(response);
+  });}
+  submit(gameId,key,requestHash,evaluate,validate){return this.transaction(()=>{
     const duplicate=this.db.prepare('SELECT request_hash,response FROM attempts WHERE game_id=? AND idempotency_key=?').get(gameId,key);if(duplicate){if(requestHash&&duplicate.request_hash!==requestHash)throw new AppError('REUSED_KEY','La clave de este intento ya se usó con otra respuesta.',409);return parse(duplicate.response);}
     const game=this.game(gameId);if(!game)throw new AppError('GAME_NOT_FOUND','Esta partida ya no está disponible.',404);
+    validate?.(game);
     const continuous=game.mode==='choice'&&game.state.continuous===true;
     const guided=game.mode==='radar'&&game.state.guided===true;
     if(game.completed)return {correct:continuous||guided?game.state.outcome==='correct':true,completed:true,alreadyCompleted:true,xpEarned:0,...continuous?{outcome:game.state.outcome,arcadePoints:0}:guided?{outcome:game.state.outcome,assisted:game.state.assisted===true}:{},message:'Esta partida ya terminó.'};
@@ -128,8 +152,9 @@ export class Store{
     const patterns=this.db.prepare(`SELECT category,COUNT(*) occurrences,COUNT(DISTINCT analysis_id) reviews,MIN(created_at) firstSeen,MAX(created_at) lastSeen FROM issues WHERE ${active} GROUP BY category ORDER BY occurrences DESC,category`).all().map(row=>{const latest=this.db.prepare(`SELECT * FROM issues WHERE category=? AND ${active} ORDER BY created_at DESC,rowid DESC LIMIT 1`).get(row.category),stats=practice.get(row.category)||{};return {...row,label:categoryLabels[row.category],latestIssueId:latest.id,original:latest.original,replacement:latest.replacement,attempts:Number(stats.attempts||0),mistakes:Number(stats.mistakes||0),unassisted:Number(stats.unassisted||0)};});
     const recent=this.db.prepare('SELECT a.id,a.created_at date,a.status,a.locale,COUNT(i.id) errors FROM analyses a LEFT JOIN issues i ON i.analysis_id=a.id GROUP BY a.id ORDER BY a.created_at DESC,a.rowid DESC LIMIT 30').all();
     const modeCounts=Object.fromEntries(this.db.prepare('SELECT g.mode,COUNT(*) count FROM completions c JOIN games g ON g.id=c.game_id GROUP BY g.mode').all().map(row=>[row.mode,row.count]));
-    const practiceRounds=this.db.prepare('SELECT * FROM practice_rounds ORDER BY rowid DESC LIMIT 10').all().map(row=>{const stats=parse(row.stats),total=parse(row.plan).length,completedCount=stats.correct+stats.wrong+stats.missed+stats.exhausted;return {id:row.id,issueId:row.issue_id,mode:row.mode,total,completedCount,complete:completedCount>=total,stats,mix:parse(row.mix),createdAt:row.created_at,points:row.points,xpEarned:row.xp_earned};});return {totals,patterns,recent,modeCounts,practiceRounds};
+    const practiceRounds=this.db.prepare('SELECT * FROM practice_rounds ORDER BY rowid DESC LIMIT 10').all().map(row=>{const stats=parse(row.stats),total=parse(row.plan).length,completedCount=stats.correct+stats.wrong+stats.missed+stats.exhausted;return {id:row.id,issueId:row.issue_id,mode:row.mode,total,completedCount,complete:completedCount>=total,stats,mix:parse(row.mix),createdAt:row.created_at,points:row.points,xpEarned:row.xp_earned};});
+    const adventures=this.db.prepare("SELECT * FROM games WHERE mode IN ('jump','maze') ORDER BY rowid DESC LIMIT 20").all().map(row=>{const state=parse(row.state),data=parse(row.private_data);return {id:row.id,issueId:row.issue_id,mode:row.mode,completed:Boolean(row.completed),checkpointsComplete:state.step,total:data.items.length,movementMistakes:state.movementMistakes,createdAt:row.created_at};});return {totals,patterns,recent,modeCounts,practiceRounds,adventures};
   }
-  export(){const tables={};for(const name of ['analyses','issues','banks','games','attempts','completions','rewards','practice_rounds'])tables[name]=this.db.prepare('SELECT * FROM '+name).all();return {app:'MistakeQuest',version:1,exportedAt:stamp(),settings:this.settings(),progress:this.progress(),tables};}
-  clearData(){this.db.exec('PRAGMA secure_delete=ON');this.transaction(()=>{for(const name of ['practice_rounds','attempts','completions','rewards','games','banks','issues','analyses'])this.db.exec('DELETE FROM '+name);});this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');}
+  export(){const tables={};for(const name of ['analyses','issues','banks','game_actions','games','attempts','completions','rewards','practice_rounds'])tables[name]=this.db.prepare('SELECT * FROM '+name).all();return {app:'MistakeQuest',version:1,exportedAt:stamp(),settings:this.settings(),progress:this.progress(),tables};}
+  clearData(){this.db.exec('PRAGMA secure_delete=ON');this.transaction(()=>{for(const name of ['practice_rounds','game_actions','attempts','completions','rewards','games','banks','issues','analyses'])this.db.exec('DELETE FROM '+name);});this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');}
 }

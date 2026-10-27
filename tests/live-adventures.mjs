@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {resolve} from 'node:path';
+import {randomUUID} from 'node:crypto';
+const mode=process.argv.includes('maze')?'maze':'jump',root=resolve('test-results/live-adventure-'+mode+'-'+Date.now());mkdirSync(root,{recursive:true});process.env.MQ_DATA_DIR=root;
+const [{Store},{buildApp},{Engines},{practiceFragment}]=await Promise.all([import('../service/store.js'),import('../service/app.js'),import('../service/engines.js'),import('../service/games.js')]);
+const path=resolve(root,'practice.sqlite'),report={passed:false,mode,root,calls:[],games:[]},text='She walk to school. I do not know where is my notebook.';
+let store=new Store(path),app;
+function engines(){const e=new Engines();for(const key of ['chat','check']){const actual=e[key].bind(e);e[key]=async(...args)=>{const call={method:key,...key==='chat'?{input:args[2]}:{text:args[0]}};report.calls.push(call);try{const value=await actual(...args);call.ok=true;if(key==='chat')call.result=value.value;return value;}catch(error){call.ok=false;call.error=error.message;throw error;}};}return e;}
+const headers={host:'127.0.0.1:3210',origin:'http://127.0.0.1:3210','x-mistakequest':'1'};
+async function request(method,url,payload){const r=await app.inject({method,url,headers,...payload?{payload}:{}});assert.equal(r.statusCode,200,r.body);return r.json();}
+function route(board,from,to){const blocked=new Set(board.walls.map(p=>`${p.x},${p.y}`)),queue=[{...from,path:[]}],seen=new Set([`${from.x},${from.y}`]);for(let i=0;i<queue.length;i++){const p=queue[i];if(p.x===to.x&&p.y===to.y)return p.path;for(const [direction,dx,dy]of [['up',0,-1],['down',0,1],['left',-1,0],['right',1,0]]){const x=p.x+dx,y=p.y+dy,key=`${x},${y}`;if(x<0||y<0||x>=board.width||y>=board.height||blocked.has(key)||seen.has(key))continue;seen.add(key);queue.push({x,y,path:[...p.path,direction]});}}throw Error('Unreachable maze word');}
+try{
+ const e=engines(),health=await e.health('qwen3:8b');assert.ok(health.ollama&&health.languageTool&&health.modelReady);app=await buildApp({store,engines:e});
+ console.log('Reviewing synthetic text with real local engines');const review=await request('POST','/api/analyze',{text,locale:'en-US'});assert.equal(review.status,'issues');assert.equal(review.correctedText,'She walks to school. I do not know where my notebook is.');assert.equal(review.issues.length,2);report.corrections=review.issues;
+ for(const issue of review.issues){console.log('Creating real '+mode+' practice for '+issue.original);let game=await request('POST','/api/games',{issueId:issue.id,mode});const id=game.id,bank=store.getBank(issue.id);assert.ok(bank.items.length>=3);assert.equal(game.adventure.total,3);assert.deepEqual(practiceFragment(store.issue(issue.id)),practiceFragment(issue));
+  if(mode==='jump'){const attempts=store.progress().totals.attempts;const action={checkpoint:0,type:'fall',idempotencyKey:randomUUID()},first=await request('POST','/api/games/'+id+'/action',action);assert.deepEqual(await request('POST','/api/games/'+id+'/action',action),first);assert.equal(store.progress().totals.attempts,attempts);assert.equal(first.game.adventure.movementMistakes,1);game=first.game;const wrong=await request('POST','/api/games/'+id+'/attempt',{checkpoint:0,answer:'0',idempotencyKey:randomUUID()});assert.equal(wrong.correct,false);assert.equal(wrong.xpEarned,0);}
+  for(let checkpoint=0;checkpoint<3;checkpoint++){
+   const item=store.game(id).privateData.items[checkpoint];assert.deepEqual(practiceFragment({...item,category:issue.category}),practiceFragment(issue));assert.equal(game.text,item.bad);
+   let answer;if(mode==='jump'){assert.equal(game.options.find(option=>option.id===1).text,item.replacement);answer={answer:'1'};}else{
+    const tokens=[...game.board.tokens].sort((a,b)=>a.id-b.id);for(const token of tokens){for(const direction of route(game.board,game.adventure.position,token))game=(await request('POST','/api/games/'+id+'/action',{checkpoint,type:'move',direction,idempotencyKey:randomUUID()})).game;game=(await request('POST','/api/games/'+id+'/action',{checkpoint,type:'collect',idempotencyKey:randomUUID()})).game;}
+    for(const direction of route(game.board,game.adventure.position,game.board.exit))game=(await request('POST','/api/games/'+id+'/action',{checkpoint,type:'move',direction,idempotencyKey:randomUUID()})).game;
+    assert.deepEqual(game.adventure.collected,tokens.map(t=>t.id));answer={tokenIds:game.adventure.collected};
+   }
+   const input={...answer,checkpoint,idempotencyKey:randomUUID()},result=await request('POST','/api/games/'+id+'/attempt',input);assert.equal(result.correct,true);assert.equal(result.completed,checkpoint===2);assert.equal(result.correctedSentence,item.good);assert.equal(result.xpEarned,checkpoint===2?20:0);const before=store.progress();await request('POST','/api/games/'+id+'/attempt',input);assert.deepEqual(store.progress(),before);if(!result.completed)game=result.nextQuestion;
+  }
+  report.games.push({id,issueId:issue.id,mode,items:store.game(id).privateData.items.map(({bad,good,origin})=>({bad,good,origin})),completed:true});
+ }
+ const before=store.export();await app.close();app=null;store.close();store=new Store(path);app=await buildApp({store,engines:engines()});assert.deepEqual(store.export().tables,before.tables);assert.deepEqual(await request('GET','/api/progress'),JSON.parse(JSON.stringify(before.progress)));assert.equal(before.progress.totals.completedGames,2);assert.equal(before.progress.totals.xp,40);assert.ok(report.calls.some(call=>call.method==='chat'&&call.ok));assert.ok(report.calls.some(call=>call.method==='check'&&call.ok));report.totals=before.progress.totals;report.exactRestart=true;report.passed=true;console.log(JSON.stringify({passed:true,mode,totals:report.totals,root}));
+}catch(error){report.failure=error.stack;console.error(error);process.exitCode=1;}finally{await app?.close();store.close();writeFileSync(resolve(root,'result.json'),JSON.stringify(report,null,2));}

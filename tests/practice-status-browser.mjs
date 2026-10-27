@@ -32,7 +32,7 @@ try{
   await page.goto(base);await page.getByText('IA local lista',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Mi progreso',exact:true}).click();
   await page.getByRole('button',{name:'Practicar',exact:true}).click();
-  assert.equal(await page.locator('.mode-card').count(),6);
+  assert.equal(await page.locator('.mode-card').count(),(await (await page.request.get(base+'/api/modes')).json()).modes.length);
   const received=page.waitForResponse(response=>response.url()===base+'/api/practice-rounds'&&response.request().method()==='POST');
   await page.locator('.mode-card').filter({has:page.getByRole('heading',{name:'Dos caminos',exact:true})}).click();
   const response=await received;assert.equal(response.status(),200);assert.equal((await response.json()).status,'already_correct');

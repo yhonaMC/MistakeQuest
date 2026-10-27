@@ -20,7 +20,7 @@
 <p align="center">
   <a href="docs/README.es.md">Español</a> ·
   <a href="#get-started">Get started</a> ·
-  <a href="#six-ways-to-practice">The games</a> ·
+  <a href="#ways-to-practice">The games</a> ·
   <a href="#architecture">Architecture</a> ·
   <a href="#development-and-tests">Development</a>
 </p>
@@ -36,7 +36,7 @@ The starting point is simple: **correct English should stay as it is**. Grammar 
 ## What you can do
 
 - **Review your own writing.** Check up to 6,000 characters using US or British English, with corrections, short explanations, and notices when a result is uncertain.
-- **Learn from a concrete correction.** Choose among six optional games built from your error and additional short examples checked before use.
+- **Learn from a concrete correction.** Choose an optional game built from your error and additional short examples checked before use.
 - **Return to what needs practice.** Saved rounds revisit mistakes, rotate examples across game formats, and keep your progress between visits.
 - **See your learning history.** Track recurring writing errors, reviews, game attempts, completed games, race points, and XP. Writing errors and wrong game answers are counted separately.
 - **Use Spanish or English controls.** Change the interface language without losing your draft or game. The English variant is an independent setting; exercises remain in English. Generated explanations currently use Spanish and are not automatically translated.
@@ -94,6 +94,8 @@ Closing the browser tab leaves the service and engines running. Use the stop sho
 
 The review pipeline combines an independent AI review with LanguageTool candidates, checks that edits match the original text, and filters optional style changes. Longer texts are reviewed in segments. Independent compound corrections become smaller practice targets; a word-order repair stays together so moving a verb cannot become separate deletion and insertion exercises. Unchanged surrounding words remain outside the target. Ambiguous cases can remain unchanged with an uncertainty notice.
 
+Short embedded location questions receive a restricted word-order check even when the first AI pass misses them: “I do not know where is my notebook.” can become “I do not know where my notebook is.” The check preserves the existing words, meaning and tense; quoted direct questions are excluded.
+
 Practice examples must reproduce a specific correction. LanguageTool or an independent AI review checks them before they enter the persistent example bank. Games prefer less-seen sentences across formats; if extra generation fails, already checked examples remain available. Historical corrections are checked again before practice: if a fragment was already correct, it is retired from recurring-error practice without creating a game or artificial XP.
 
 For word-order variety, the app builds simple indirect-question contexts from the confirmed clause and can request additional frames from the AI. It inserts the confirmed correction itself, keeping a necessary source introducer such as **where** and any unchanged predicate or negation. Every new sentence must pass grammar and independent local AI checks before it is saved, including contexts derived by the app. Verification has a bounded budget for slower engines. Legacy banks that split a word-order repair are rebuilt when that error is opened; saved reviews, attempts, rewards, and points stay intact.
@@ -104,7 +106,7 @@ For word-order variety, the app builds simple indirect-question contexts from th
 
 AI can still miss errors or suggest an incorrect change. These checks reduce that risk; they do not guarantee a perfect review. Ambiguous tense choices are deliberately left alone when the context does not justify a change.
 
-## Six ways to practice
+## Ways to practice
 
 | Game | What you do |
 | --- | --- |
@@ -114,6 +116,15 @@ AI can still miss errors or suggest an incorrect change. These checks reduce tha
 | **Build the sentence** · Arma la frase | Arrange word tiles into a correct sentence. |
 | **Connect pairs** · Conecta parejas | Match sentences with their corrections. |
 | **Keep it or correct it?** · ¿Se queda o se corrige? | Decide whether a sentence needs a change, including recognizing valid English. |
+| **Orbital jump** · Salto orbital | Jump between platforms and land on the verified correction. |
+
+### Orbital jump: verified corrections, real landings
+
+Use **← / →** or **A / D** to move, **Space** to jump, or the touch controls. Climb neutral stepping stones and land on the platform containing the correction that fits your sentence. Movement help can animate a flight to your chosen platform; it does not reveal the answer or reduce XP.
+
+Each adventure uses up to **three different verified sentences** for the chosen writing error. Every correct landing saves a checkpoint. Falls are saved separately as movement slips and never become English mistakes or remove XP. Pause whenever you want; there is no forced answer timer. Continue the same adventure from **My progress**, including after closing the browser or restarting the app.
+
+English hints and reveals use the existing final reward rules. The server grades the answer and credits the final reward once. Movement actions have their own durable idempotency records, separate from English attempts; a lost answer or movement response can be recovered with **Check again**.
 
 ### Two paths: ten gates, then a choice to continue
 
@@ -227,10 +238,11 @@ The local engines must already be running. The Windows launcher sets its own `MQ
 | `GET`, `PATCH` | `/api/settings` | Read or update `locale`, `model`, and `saveTexts`. |
 | `POST` | `/api/analyze` | Review `{ "text": "...", "locale": "en-US" }`. |
 | `POST` | `/api/improvements` | Request an optional improvement using the same input. |
-| `GET` | `/api/modes` | List the six game modes. |
+| `GET` | `/api/modes` | List the available game modes. |
 | `POST` | `/api/games` | Create a game using an `issueId` and `mode`. |
 | `GET` | `/api/games/:id` | Read public game state. |
 | `POST` | `/api/games/:id/attempt` | Submit an answer and an `idempotencyKey`. |
+| `POST` | `/api/games/:id/action` | Save an adventure movement action with `checkpoint`, `type`, and `idempotencyKey`, without creating an English attempt. |
 | `POST` | `/api/games/:id/hint`, `/api/games/:id/reveal` | Request available assistance. |
 | `POST` | `/api/practice-rounds` | Create a `choice` or `radar` round with an `issueId` and UUID `idempotencyKey`. |
 | `GET` | `/api/practice-rounds/:id` | Read a saved round. |
@@ -255,12 +267,15 @@ There is no `dev` npm script. `npm start` runs the service against the current `
 | Command | Coverage and prerequisites |
 | --- | --- |
 | `npm test` | Node unit and API tests, including review validation, game rules, persistence, and rewards. Does not require the real engines. |
+| `npm run test:adventure:jump` | Actual browser/service flow for jump checkpoints, wrong/right landings, motor-only falls, lost-response recovery, saved-game resume and rewards. Uses an isolated verified bank; requires a current build and Edge. |
+| `npm run test:jump:board` | Manual platform physics, touch, pause, assistance, reduced motion and 320px readability in an isolated component. |
+| `npm run test:live:jump` | Real local-AI review and bank creation, two jump adventures from actual corrections, movement/answer idempotence and exact SQLite restart persistence. Requires running local engines. |
 | `npm run test:live` | Real Ollama, Qwen3 8B, and LanguageTool review and game checks. Start the engines first. |
 | `npm run test:live:arcade` | Starts with an empty database, reviews text and generates examples with the real local engines, then plays a full ten-gate run and guided radar session. Checks returning mistakes, restart persistence, and export. Requires a current build, engines, and Microsoft Edge; chooses its own local port. |
 | `npm run test:live:grammar` | Runs the same real-engine browser flow with a longer learner passage. Both completed games must use actual agreement, verb-form, and word-order corrections, including newly generated sentences. Checks that valid simple sentences stay unchanged and that progress survives restart. Same prerequisites as `test:live:arcade`. |
 | `npm run test:live:classic` | Reviews the same longer passage with real engines, then completes Word workshop, Build the sentence, Connect pairs, and Keep it or correct it? for three actual grammar corrections. Verifies wrong answers, hints, solutions, generated examples, a partial pairs game across a service restart, and final saved progress after reload. Same prerequisites as `test:live:arcade`. |
 | `npm run test:classic:retry` | Checks lost-response recovery in the actual classic game component and isolated service, including stable retry keys, question progression, connected pairs, and single XP rewards. Uses synthetic verified banks and no real AI; requires Microsoft Edge. Also included in `test:arcade`. |
-| `npm run test:e2e` | Real-engine browser flow through review and all six games, restart persistence, and mobile layout. Requires a current build, engines, installed Microsoft Edge, and free port `3211`. |
+| `npm run test:e2e` | Real-engine browser flow through review and the six original games, restart persistence, and mobile layout. Requires a current build, engines, installed Microsoft Edge, and free port `3211`. |
 | `npm run test:arcade` | Browser checks for six formats, ES/EN, round variety, continuous flight, saved rounds, scoring, and radar attempts. Uses isolated fixtures and simulated engines; requires a current build and Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | 3D rendering, persistent motion controls, keyboard selection, mobile sizing, and no-WebGL fallback. Uses simulated engine health; requires a build, Microsoft Edge, and free port `3212`. |
 | `node tests/writing-layout-browser.mjs` | Editor size, focus, and selection through review on desktop and mobile. Requires Microsoft Edge. |

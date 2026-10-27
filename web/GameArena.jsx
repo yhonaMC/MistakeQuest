@@ -2,7 +2,9 @@ import {useI18n} from './i18n.js';
 import React,{useEffect,useRef,useState} from 'react';import {api} from './api.js';import Icon from './Icon.jsx';import {Button} from './App.jsx';import ArcadeSession from './ArcadeSession.jsx';import './game-layout.css';
 import ContinuousRunnerSession from './ContinuousRunnerSession.jsx';
 import GuidedRadarSession from './GuidedRadarSession.jsx';
-export default function GameArena(props){return props.game.mode==='radar'&&props.game.guided?<GuidedRadarSession {...props}/>:props.game.mode==='choice'&&props.game.continuous?<ContinuousRunnerSession {...props}/>:['radar','choice'].includes(props.game.mode)?<ArcadeSession {...props}/>:<ClassicGameArena {...props}/>;}
+import AdventureSession from './AdventureSession.jsx';
+import JumpArcade from './JumpArcade.jsx';
+export default function GameArena(props){return props.game.mode==='jump'?<AdventureSession {...props} Board={JumpArcade}/>:props.game.mode==='radar'&&props.game.guided?<GuidedRadarSession {...props}/>:props.game.mode==='choice'&&props.game.continuous?<ContinuousRunnerSession {...props}/>:['radar','choice'].includes(props.game.mode)?<ArcadeSession {...props}/>:<ClassicGameArena {...props}/>;}
 function ClassicGameArena({game:initial,onExit,onProgress,onAgain,onModes,generating,onFeedback,motion=true}){
  const {t,errorText}=useI18n();
  const [game,setGame]=useState(initial),[answer,setAnswer]=useState(''),[selected,setSelected]=useState(null),[tiles,setTiles]=useState([]),[left,setLeft]=useState(null),[matched,setMatched]=useState(initial.matched||[]),[feedback,setFeedback]=useState(null),[help,setHelp]=useState(null),[busy,setBusy]=useState(false),[error,setError]=useState('');

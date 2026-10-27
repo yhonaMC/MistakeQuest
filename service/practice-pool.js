@@ -7,9 +7,14 @@ const sentenceKey=value=>typeof value==='string'?normalizeSentence(value):'';
 // Every visible sentence in a pairs/judge game participates in the same history.
 export function selectPracticeItems(store,issueId,bank){
   const exposure=new Map();
-  for(const row of store.db.prepare('SELECT rowid AS sequence,mode,private_data FROM games WHERE issue_id=? ORDER BY rowid').all(issueId)){
+  for(const row of store.db.prepare('SELECT rowid AS sequence,mode,private_data,state,completed FROM games WHERE issue_id=? ORDER BY rowid').all(issueId)){
     let data;try{data=JSON.parse(row.private_data);}catch{continue;}
-    const shown=row.mode==='pairs'?data?.bank?.items:row.mode==='judge'?data?.judges:[data?.item];
+    let shown=row.mode==='pairs'?data?.bank?.items:row.mode==='judge'?data?.judges:[data?.item];
+    if(['jump','maze'].includes(row.mode)&&Array.isArray(data?.items)){
+      let state;try{state=JSON.parse(row.state);}catch{state={};}
+      const visible=Number.isInteger(state?.step)&&state.step>=0?state.step+1:1;
+      shown=data.items.slice(0,row.completed?data.items.length:visible);
+    }
     if(!Array.isArray(shown))continue;
     const seen=new Set(shown.map(item=>sentenceKey(item?.good)).filter(Boolean));
     for(const key of seen){

@@ -2,8 +2,8 @@ import Fastify from 'fastify';
 import fastifyStatic from '@fastify/static';
 import {existsSync} from 'node:fs';import {fileURLToPath} from 'node:url';
 import {z} from 'zod';
-import {AppError,config} from './config.js';import {Store} from './store.js';import {Engines} from './engines.js';import {Reviewer} from './review.js';import {GameService,publicGame,modeInfo} from './games.js';
-import {analyzeInput,settingsInput,gameInput,attemptInput} from './schemas.js';
+import {AppError,config,modes} from './config.js';import {Store} from './store.js';import {Engines} from './engines.js';import {Reviewer} from './review.js';import {GameService,publicGame,modeInfo} from './games.js';
+import {analyzeInput,settingsInput,gameInput,attemptInput,gameActionInput} from './schemas.js';
 import {practiceRoundInput,practiceRoundNextInput} from './schemas.js';import {PracticeRounds} from './practice-rounds.js';
 export async function buildApp(options={}){
   const ownStore=!options.store,store=options.store||new Store(config.dbPath),engines=options.engines||new Engines(),reviewer=new Reviewer(store,engines),games=new GameService(store,engines);
@@ -33,13 +33,14 @@ export async function buildApp(options={}){
   app.patch('/api/settings',async request=>{const values=settingsInput.parse(request.body);if(values.model){const health=await engines.health(values.model);if(!health.models.some(model=>model.name===values.model&&!model.remote)||/cloud/i.test(values.model))throw new AppError('LOCAL_MODEL_REQUIRED','Elige un modelo local ya instalado.');}return store.updateSettings(values);});
   app.post('/api/analyze',async(request,reply)=>{const input=analyzeInput.parse(request.body);return cancellable(request,reply,signal=>reviewer.analyze(input.text,input.locale,signal));});
   app.post('/api/improvements',async(request,reply)=>{const input=analyzeInput.parse(request.body);return cancellable(request,reply,signal=>reviewer.improvements(input.text,input.locale,signal));});
-  app.get('/api/modes',async()=>({modes:Object.entries(modeInfo).map(([id,value])=>({id,...value}))}));
+  app.get('/api/modes',async()=>({modes:modes.map(id=>({id,...modeInfo[id]}))}));
   app.post('/api/practice-rounds',async(request,reply)=>{const input=practiceRoundInput.parse(request.body);return cancellable(request,reply,signal=>rounds.create(input,signal));});
   app.get('/api/practice-rounds/:id',async request=>rounds.get(request.params.id));
   app.post('/api/practice-rounds/:id/next',async request=>rounds.next(request.params.id,practiceRoundNextInput.parse(request.body).afterGameId));
   app.post('/api/games',async(request,reply)=>{const input=gameInput.parse(request.body);return cancellable(request,reply,signal=>games.create(input.issueId,input.mode,signal,{varied:input.varied,continuous:input.continuous,excludeIssueIds:input.excludeIssueIds}));});
   app.get('/api/games/:id',async request=>{const game=store.game(request.params.id);if(!game)throw new AppError('GAME_NOT_FOUND','Esta partida ya no está disponible.',404);return publicGame(game);});
   app.post('/api/games/:id/attempt',async(request,reply)=>{const answer=attemptInput.parse(request.body);const result=await cancellable(request,reply,signal=>games.attempt(request.params.id,answer,signal));const roundId=store.game(request.params.id)?.state.learningRoundId;return {...result,totals:store.progress().totals,...roundId?{practiceRound:rounds.get(roundId)}:{}};});
+  app.post('/api/games/:id/action',async request=>games.action(request.params.id,gameActionInput.parse(request.body)));
   app.post('/api/games/:id/hint',async request=>games.assist(request.params.id,false));
   app.post('/api/games/:id/reveal',async request=>games.assist(request.params.id,true));
   app.get('/api/progress',async()=>store.progress());

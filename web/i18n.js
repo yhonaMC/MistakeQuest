@@ -3,6 +3,11 @@ import React,{createContext,useContext,useEffect,useMemo,useState} from 'react';
 export const LANGUAGE_KEY='mistakequest.interfaceLanguage';
 // Spanish is the source language. Add the English copy here, then call t(source, values).
 export const english={
+  'Salta hasta la opción que corrige la frase y guarda cada punto de control.':'Jump to the option that corrects the sentence and save each checkpoint.',
+  'La clave de esta acción ya se usó con otros datos.':'This action key was already used for different data.',
+  'Salto orbital':'Orbital jump','Salta hasta la corrección y guarda cada checkpoint.':'Jump to the correction and save each checkpoint.','Salta':'Jump','Salta hasta la opción correcta sin cambiar el resto de la frase.':'Jump to the correct option without changing the rest of the sentence.',
+  'Tus aventuras guardadas':'Your saved adventures','Continuar partida':'Continue game','Jugar otra partida':'Play another game','{current} de {total} checkpoints':'{current} of {total} checkpoints','{count} tropiezos de movimiento':'{count} movement slips',
+  'Indica el punto de control actual.':'Provide the current checkpoint.','El punto de control cambió. Recupera la partida guardada.':'The checkpoint changed. Recover the saved game.','No se pudo preparar este formato con frases verificadas.':'This format could not be prepared with verified sentences.','Esta partida no tiene acciones de movimiento.':'This game has no movement actions.','Esta acción no corresponde a la aventura.':'This action does not belong to this adventure.','Bien. Aventura terminada.':'Well done. Adventure complete.','Bien. Continúa con el siguiente punto de control.':'Well done. Continue to the next checkpoint.',
   'Tus rondas guardadas':'Your saved rounds','Continuar ronda':'Continue round','Jugar otra ronda':'Play another round','{count} aciertos sin ayuda':'{count} correct without help','{count} con pistas':'{count} with hints','{count} por repasar':'{count} to review','No se pudo preparar la ronda guardada.':'The saved round could not be prepared.',
   'Puntos de carrera guardados':'Saved race points',
   'Idioma de la interfaz':'Interface language','Español':'Spanish','Inglés':'English',

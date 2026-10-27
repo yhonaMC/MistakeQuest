@@ -20,7 +20,7 @@
 <p align="center">
   <a href="../README.md">English</a> ·
   <a href="#primeros-pasos">Primeros pasos</a> ·
-  <a href="#seis-formas-de-practicar">Los juegos</a> ·
+  <a href="#formas-de-practicar">Los juegos</a> ·
   <a href="#arquitectura">Arquitectura</a> ·
   <a href="#desarrollo-y-pruebas">Desarrollo</a>
 </p>
@@ -36,7 +36,7 @@ La idea de partida es sencilla: **lo que está bien, se queda**. La revisión bu
 ## Qué puedes hacer
 
 - **Revisar tus propios textos.** Comprueba hasta 6.000 caracteres en inglés de EE. UU. o británico, con correcciones, explicaciones breves y avisos cuando hay dudas.
-- **Aprender de una corrección concreta.** Elige entre seis juegos opcionales que usan tu error y ejemplos cortos adicionales comprobados antes de utilizarlos.
+- **Aprender de una corrección concreta.** Elige un juego opcional que usan tu error y ejemplos cortos adicionales comprobados antes de utilizarlos.
 - **Volver a lo que necesita práctica.** Las rondas guardadas recuperan fallos, rotan ejemplos entre los formatos y conservan el progreso entre visitas.
 - **Consultar tu historial de aprendizaje.** Sigue los errores de escritura recurrentes, revisiones, intentos de juego, partidas terminadas, puntos de carrera y XP. Los errores al escribir se cuentan aparte de los fallos al jugar.
 - **Usar los controles en español o inglés.** Cambia el idioma de la interfaz sin perder el borrador ni la partida. La variante de inglés se configura por separado; los ejercicios siguen en inglés. Las explicaciones generadas usan actualmente el español y no se traducen automáticamente.
@@ -94,6 +94,8 @@ Cerrar la pestaña deja el servicio y los motores funcionando. Usa el acceso par
 
 La revisión combina una evaluación independiente de la IA con candidatos de LanguageTool, comprueba que los cambios coincidan con el original y filtra las preferencias de estilo opcionales. Los textos largos se revisan por fragmentos. Las correcciones compuestas independientes se separan en objetivos más pequeños; un cambio de orden se conserva completo para que mover un verbo no se convierta en ejercicios separados de borrarlo y añadirlo. Las palabras de alrededor que no cambian quedan fuera del objetivo. Los casos ambiguos pueden conservarse con un aviso de duda.
 
+Las preguntas indirectas cortas de ubicación reciben una comprobación de orden con vocabulario restringido aunque la primera revisión las omita: «I do not know where is my notebook.» puede pasar a «I do not know where my notebook is.». Se conservan las palabras, el significado y el tiempo verbal; se excluyen las preguntas directas entre comillas.
+
 Cada ejemplo de práctica debe reproducir una corrección específica. LanguageTool o una revisión independiente de la IA lo comprueban antes de incorporarlo al banco persistente. Los juegos priorizan las frases menos vistas entre todos los formatos; si falla la generación adicional, siguen disponibles los ejemplos ya comprobados. Las correcciones históricas se revisan antes de practicar: si el fragmento ya estaba bien, deja de proponerse como error recurrente sin crear una partida ni XP ficticios.
 
 Para variar los ejercicios de orden, la app construye contextos sencillos de preguntas indirectas a partir de la cláusula confirmada y puede solicitar más contextos a la IA. Inserta la corrección confirmada y conserva una palabra introductoria necesaria, como **where**, además del predicado o la negación que no cambian. Cada frase nueva debe pasar la comprobación gramatical y la revisión independiente de la IA local antes de guardarse, también cuando la construye la app. La verificación tiene un tiempo limitado que contempla motores más lentos. Los bancos antiguos que separaron un cambio de orden se regeneran al abrir ese error; las revisiones, los intentos, las recompensas y los puntos guardados se conservan.
@@ -104,7 +106,7 @@ Para variar los ejercicios de orden, la app construye contextos sencillos de pre
 
 La IA todavía puede omitir errores o proponer cambios incorrectos. Las comprobaciones reducen ese riesgo, pero no garantizan una revisión perfecta. Los tiempos verbales ambiguos se conservan cuando el contexto no justifica cambiarlos.
 
-## Seis formas de practicar
+## Formas de practicar
 
 | Juego | Qué haces |
 | --- | --- |
@@ -114,6 +116,15 @@ La IA todavía puede omitir errores o proponer cambios incorrectos. Las comproba
 | **Arma la frase** | Ordena fichas para construir una frase correcta. |
 | **Conecta parejas** | Une cada frase con su corrección. |
 | **¿Se queda o se corrige?** | Decide si una frase necesita un cambio y aprende también a reconocer el inglés válido. |
+| **Salto orbital** | Salta entre plataformas y aterriza en la corrección verificada. |
+
+### Salto orbital: correcciones verificadas y aterrizajes reales
+
+Usa **← / →** o **A / D** para moverte, **Espacio** para saltar o los controles táctiles. Sube por las plataformas intermedias y aterriza en la que contiene la corrección que encaja en tu frase. La ayuda de movimiento puede animar el vuelo hasta la plataforma elegida; no revela la respuesta ni reduce los XP.
+
+Cada aventura utiliza hasta **tres frases verificadas distintas** del error elegido. Cada aterrizaje correcto guarda un checkpoint. Las caídas se guardan aparte como tropiezos de movimiento: nunca suman errores de inglés ni restan XP. Puedes pausar cuando quieras y no hay un tiempo obligatorio para responder. Continúa la misma aventura desde **Mi progreso**, incluso después de cerrar el navegador o reiniciar la app.
+
+Las pistas y soluciones de inglés mantienen las recompensas finales existentes. El servidor evalúa la respuesta y entrega la recompensa final una sola vez. Las acciones de movimiento tienen registros duraderos de idempotencia separados de los intentos de inglés; **Comprobar de nuevo** recupera una respuesta o movimiento cuya confirmación se perdió.
 
 ### Dos caminos: diez puertas y la opción de continuar
 
@@ -227,10 +238,11 @@ Los motores locales deben estar encendidos. El lanzador de Windows fija su propi
 | `GET`, `PATCH` | `/api/settings` | Leer o actualizar `locale`, `model` y `saveTexts`. |
 | `POST` | `/api/analyze` | Revisar `{ "text": "...", "locale": "en-US" }`. |
 | `POST` | `/api/improvements` | Pedir una mejora opcional con los mismos datos de entrada. |
-| `GET` | `/api/modes` | Listar los seis modos de juego. |
+| `GET` | `/api/modes` | Listar los modos de juego disponibles. |
 | `POST` | `/api/games` | Crear un juego con `issueId` y `mode`. |
 | `GET` | `/api/games/:id` | Leer el estado público del juego. |
 | `POST` | `/api/games/:id/attempt` | Enviar una respuesta y una `idempotencyKey`. |
+| `POST` | `/api/games/:id/action` | Guardar una acción de movimiento con `checkpoint`, `type` e `idempotencyKey`, sin crear un intento de inglés. |
 | `POST` | `/api/games/:id/hint`, `/api/games/:id/reveal` | Pedir la ayuda disponible. |
 | `POST` | `/api/practice-rounds` | Crear una ronda `choice` o `radar` con `issueId` e `idempotencyKey` UUID. |
 | `GET` | `/api/practice-rounds/:id` | Leer una ronda guardada. |
@@ -255,12 +267,15 @@ No hay un script npm `dev`. `npm start` ejecuta el servicio con la compilación 
 | Comando | Cobertura y requisitos |
 | --- | --- |
 | `npm test` | Pruebas unitarias y de API de Node: validación de revisiones, reglas de juegos, persistencia y recompensas. No necesita los motores reales. |
+| `npm run test:adventure:jump` | Flujo real de navegador y servicio: checkpoints, aterrizajes incorrectos/correctos, caídas sin errores de inglés, recuperación de respuestas, continuación y recompensas. Usa un banco verificado aislado; necesita compilación actual y Edge. |
+| `npm run test:jump:board` | Física manual de plataformas, controles táctiles, pausa, ayuda, movimiento reducido y legibilidad a 320px en un componente aislado. |
+| `npm run test:live:jump` | Revisión y creación de bancos con IA local real, dos aventuras basadas en correcciones reales, idempotencia de movimientos/respuestas y guardado exacto tras reiniciar SQLite. Requiere los motores locales activos. |
 | `npm run test:live` | Revisiones y juegos con Ollama, Qwen3 8B y LanguageTool reales. Enciende antes los motores. |
 | `npm run test:live:arcade` | Parte de una base vacía, revisa el texto y genera ejemplos con los motores locales reales; después juega diez puertas y una sesión de Radar guiado. Verifica el regreso de errores, el guardado tras reiniciar y la exportación. Requiere compilación actual, motores y Microsoft Edge; elige su propio puerto local. |
 | `npm run test:live:grammar` | Repite el flujo de navegador con motores reales y un texto más largo. Ambos juegos completos deben usar correcciones reales de concordancia, forma verbal y orden de palabras, con frases nuevas generadas. Comprueba que el inglés sencillo correcto se conserve y que el progreso sobreviva al reinicio. Requiere lo mismo que `test:live:arcade`. |
 | `npm run test:live:classic` | Revisa el mismo texto largo con los motores reales y completa Taller de palabras, Arma la frase, Conecta parejas y ¿Se queda o se corrige? para tres correcciones gramaticales reales. Verifica respuestas incorrectas, pistas, soluciones, ejemplos generados, una partida parcial de parejas durante un reinicio del servicio y el progreso final tras recargar. Requiere lo mismo que `test:live:arcade`. |
 | `npm run test:classic:retry` | Comprueba la recuperación de respuestas perdidas en el componente clásico real y un servicio aislado: claves de reintento estables, avance de preguntas, parejas conectadas y recompensas de XP únicas. Usa bancos ficticios verificados y no llama a la IA; requiere Microsoft Edge. Incluido también en `test:arcade`. |
-| `npm run test:e2e` | Flujo con motores reales desde la revisión hasta los seis juegos, persistencia tras reiniciar y diseño móvil. Requiere compilación actual, motores, Microsoft Edge instalado y puerto `3211` libre. |
+| `npm run test:e2e` | Flujo con motores reales desde la revisión hasta los seis juegos originales, persistencia tras reiniciar y diseño móvil. Requiere compilación actual, motores, Microsoft Edge instalado y puerto `3211` libre. |
 | `npm run test:arcade` | Los seis formatos, ES/EN, variedad, vuelo continuo, rondas guardadas, puntos e intentos de Radar. Usa datos aislados y motores simulados; requiere compilación actual y Microsoft Edge. |
 | `node tests/orbit-ui.mjs` | Render 3D, controles persistentes de movimiento, selección por teclado, tamaños móviles y respaldo sin WebGL. Simula la disponibilidad de motores; requiere compilación, Microsoft Edge y puerto `3212` libre. |
 | `node tests/writing-layout-browser.mjs` | Tamaño, foco y selección del editor durante la revisión en escritorio y móvil. Requiere Microsoft Edge. |
